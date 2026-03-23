@@ -32,7 +32,7 @@ app.use(helmet({
 }));
 
 // ─── CORS — restrict in production ────────────────────────────────────────────
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',');
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://swiftshield.vercel.app').split(',');
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
