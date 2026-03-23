@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SwiftShield — Access</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="access-wrap">
+  <div class="access-card glass">
+
+    <div class="card-brand">
+      <img src="/logo.jpeg" class="brand-icon" />
+      <div>
+        <div class="brand-name">SwiftShield</div>
+        <div class="brand-sub">LOCATION-AWARE ACCESS MONITORING</div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="field">
+      <label class="label" for="userId">User ID / Email</label>
+      <input id="userId" class="input" placeholder="username or email" autocomplete="username"/>
+    </div>
+
+    <button id="loginBtn" class="btn primary">⬡ Simulate Login</button>
+
+    <div class="status-row">
+      <div id="statusDot" class="status-dot"></div>
+      <span id="statusText">Idle — awaiting action</span>
+    </div>
+
+    <p class="card-footer-note">
+      Access is logged for security audit.<br>
+      External access requires justification.
+    </p>
+  </div>
+</div>
+
+<!-- Justification Modal -->
+<div id="justModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="justTitle">
+  <div class="modal-panel glass">
+    <div class="modal-title" id="justTitle">⚠ External Access Detected</div>
+    <div class="modal-sub">Provide justification for access outside the office perimeter.</div>
+    <textarea id="justText" class="modal-textarea" placeholder="Describe your reason for remote access..." rows="5"></textarea>
+    <div class="modal-actions">
+      <button id="cancelJust" class="btn ghost">Cancel</button>
+      <button id="submitJust" class="btn primary">Submit & Log</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<script src="/ui.js"></script>
+</body>
+</html>
