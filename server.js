@@ -34,10 +34,7 @@ app.use(helmet({
 // ─── CORS — restrict in production ────────────────────────────────────────────
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://swiftshield.vercel.app').split(',');
 app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    cb(new Error('Not allowed by CORS'));
-  }
+  origin: true
 }));
 
 app.use(bodyParser.json({ limit: '16kb' }));
