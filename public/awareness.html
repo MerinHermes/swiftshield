@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SwiftShield — Security Awareness</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    /* ── Page layout ─────────────────────────────────────── */
+    .aw-page { max-width: 900px; margin: 0 auto; padding: 32px 20px 80px; }
+
+    /* ── Hero ─────────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      padding: 56px 24px 48px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 60% at 50% 0%, rgba(0,220,180,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-tag {
+      display: inline-block;
+      font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.2em;
+      color: var(--accent); border: 1px solid rgba(0,220,180,0.3);
+      padding: 5px 14px; border-radius: 20px;
+      background: rgba(0,220,180,0.06); margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-family: var(--sans); font-weight: 800;
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      line-height: 1.15; letter-spacing: -0.02em;
+      margin-bottom: 16px; color: #fff;
+    }
+    .hero h1 span { color: var(--accent); }
+    .hero p {
+      font-family: var(--mono); font-size: 0.78rem; color: var(--muted);
+      max-width: 520px; margin: 0 auto; line-height: 1.8; letter-spacing: 0.02em;
+    }
+
+    /* ── Section titles ───────────────────────────────────── */
+    .section-title {
+      font-family: var(--mono); font-size: 0.62rem; color: var(--accent);
+      letter-spacing: 0.2em; text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .section-heading {
+      font-family: var(--sans); font-weight: 800; font-size: 1.4rem;
+      margin-bottom: 28px; color: #fff;
+    }
+    .section { margin-bottom: 64px; }
+
+    /* ── Stat strip ───────────────────────────────────────── */
+    .stat-strip {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 14px; margin-bottom: 64px;
+    }
+    @media(max-width:600px){ .stat-strip { grid-template-columns: 1fr; } }
+    .stat-card {
+      padding: 28px 24px; border-radius: var(--radius);
+      background: var(--panel); border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      text-align: center; position: relative; overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.4); }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .stat-card.red::before   { background: var(--danger); }
+    .stat-card.warn::before  { background: var(--warn); }
+    .stat-card.blue::before  { background: var(--accent2); }
+    .stat-number {
+      font-family: var(--mono); font-weight: 700;
+      font-size: 2.6rem; margin-bottom: 6px; line-height: 1;
+    }
+    .stat-card.red  .stat-number { color: var(--danger); }
+    .stat-card.warn .stat-number { color: var(--warn); }
+    .stat-card.blue .stat-number { color: var(--accent2); }
+    .stat-label { font-family: var(--mono); font-size: 0.62rem; color: var(--muted); letter-spacing: 0.1em; line-height: 1.6; }
+
+    /* ── Threat cards ─────────────────────────────────────── */
+    .threat-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    @media(max-width:600px){ .threat-grid { grid-template-columns: 1fr; } }
+    .threat-card {
+      padding: 26px; border-radius: var(--radius);
+      background: var(--panel); border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      display: flex; gap: 16px; align-items: flex-start;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .threat-card:hover { transform: translateY(-2px); border-color: rgba(255,77,109,0.3); }
+    .threat-icon {
+      font-size: 1.8rem; flex-shrink: 0;
+      width: 52px; height: 52px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,77,109,0.08); border-radius: 10px;
+      border: 1px solid rgba(255,77,109,0.2);
+    }
+    .threat-body h3 {
+      font-family: var(--sans); font-weight: 700; font-size: 0.95rem;
+      color: #fff; margin-bottom: 6px;
+    }
+    .threat-body p {
+      font-family: var(--mono); font-size: 0.68rem; color: var(--muted);
+      line-height: 1.7;
+    }
+    .threat-tag {
+      display: inline-block; margin-top: 10px;
+      padding: 3px 10px; border-radius: 4px;
+      font-family: var(--mono); font-size: 0.58rem; font-weight: 700;
+      letter-spacing: 0.08em;
+      background: rgba(255,77,109,0.1); color: var(--danger);
+      border: 1px solid rgba(255,77,109,0.25);
+    }
+
+    /* ── Timeline (why logging matters) ──────────────────── */
+    .timeline { position: relative; padding-left: 32px; }
+    .timeline::before {
+      content: '';
+      position: absolute; left: 10px; top: 6px; bottom: 6px; width: 2px;
+      background: linear-gradient(to bottom, var(--accent), var(--accent2), transparent);
+      border-radius: 2px;
+    }
+    .tl-item {
+      position: relative; margin-bottom: 32px;
+      padding: 22px 24px; border-radius: var(--radius);
+      background: var(--panel); border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .tl-item:hover { transform: translateX(4px); border-color: rgba(0,220,180,0.25); }
+    .tl-item::before {
+      content: '';
+      position: absolute; left: -27px; top: 24px;
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--accent); border: 2px solid var(--bg);
+      box-shadow: 0 0 8px var(--accent);
+    }
+    .tl-step {
+      font-family: var(--mono); font-size: 0.58rem; color: var(--accent);
+      letter-spacing: 0.14em; margin-bottom: 6px;
+    }
+    .tl-title {
+      font-family: var(--sans); font-weight: 700; font-size: 0.95rem;
+      color: #fff; margin-bottom: 6px;
+    }
+    .tl-desc {
+      font-family: var(--mono); font-size: 0.7rem; color: var(--muted); line-height: 1.7;
+    }
+
+    /* ── Remote work tips ─────────────────────────────────── */
+    .tips-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    @media(max-width:700px){ .tips-grid { grid-template-columns: 1fr 1fr; } }
+    @media(max-width:480px){ .tips-grid { grid-template-columns: 1fr; } }
+    .tip-card {
+      padding: 24px 20px; border-radius: var(--radius);
+      background: var(--panel); border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      transition: transform 0.2s, border-color 0.2s;
+      position: relative; overflow: hidden;
+    }
+    .tip-card:hover { transform: translateY(-3px); border-color: rgba(0,153,255,0.3); }
+    .tip-card::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .tip-card:hover::after { opacity: 1; }
+    .tip-emoji { font-size: 1.6rem; margin-bottom: 12px; display: block; }
+    .tip-title {
+      font-family: var(--sans); font-weight: 700; font-size: 0.88rem;
+      color: #fff; margin-bottom: 8px;
+    }
+    .tip-desc {
+      font-family: var(--mono); font-size: 0.65rem; color: var(--muted); line-height: 1.7;
+    }
+    .tip-do {
+      display: inline-block; margin-top: 10px;
+      padding: 3px 10px; border-radius: 4px;
+      font-family: var(--mono); font-size: 0.58rem; font-weight: 700;
+      background: rgba(0,220,180,0.1); color: var(--accent);
+      border: 1px solid rgba(0,220,180,0.2);
+    }
+
+    /* ── Risk meter ───────────────────────────────────────── */
+    .risk-meter {
+      padding: 28px; border-radius: var(--radius);
+      background: var(--panel); border: 1px solid var(--border);
+      backdrop-filter: blur(12px); margin-bottom: 64px;
+    }
+    .risk-meter h3 {
+      font-family: var(--sans); font-weight: 700; font-size: 0.95rem;
+      color: #fff; margin-bottom: 20px;
+    }
+    .risk-row {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 14px;
+    }
+    .risk-label {
+      font-family: var(--mono); font-size: 0.65rem; width: 80px; flex-shrink: 0;
+      font-weight: 700;
+    }
+    .risk-bar-wrap {
+      flex: 1; height: 10px; background: rgba(255,255,255,0.05);
+      border-radius: 5px; overflow: hidden;
+    }
+    .risk-bar {
+      height: 100%; border-radius: 5px;
+      animation: barGrow 1.2s cubic-bezier(0.16,1,0.3,1) both;
+    }
+    @keyframes barGrow { from{width:0} }
+    .risk-pct {
+      font-family: var(--mono); font-size: 0.65rem;
+      width: 36px; text-align: right; flex-shrink: 0;
+    }
+    .risk-row.low    .risk-label, .risk-row.low    .risk-pct { color: var(--accent); }
+    .risk-row.medium .risk-label, .risk-row.medium .risk-pct { color: var(--warn); }
+    .risk-row.high   .risk-label, .risk-row.high   .risk-pct { color: var(--danger); }
+    .risk-row.low    .risk-bar { background: var(--accent); width: 30%; animation-delay: 0.1s; }
+    .risk-row.medium .risk-bar { background: var(--warn);   width: 55%; animation-delay: 0.2s; }
+    .risk-row.high   .risk-bar { background: var(--danger); width: 85%; animation-delay: 0.3s; }
+    .risk-note {
+      font-family: var(--mono); font-size: 0.65rem; color: var(--muted);
+      margin-top: 16px; line-height: 1.7; border-top: 1px solid var(--border); padding-top: 14px;
+    }
+
+    /* ── CTA ──────────────────────────────────────────────── */
+    .cta-box {
+      text-align: center; padding: 48px 32px;
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, rgba(0,220,180,0.06), rgba(0,153,255,0.06));
+      border: 1px solid rgba(0,220,180,0.2);
+      position: relative; overflow: hidden;
+    }
+    .cta-box::before {
+      content: '🛡️';
+      position: absolute; right: 24px; top: 16px;
+      font-size: 4rem; opacity: 0.06;
+    }
+    .cta-box h2 {
+      font-family: var(--sans); font-weight: 800; font-size: 1.4rem;
+      color: #fff; margin-bottom: 10px;
+    }
+    .cta-box p {
+      font-family: var(--mono); font-size: 0.7rem; color: var(--muted);
+      margin-bottom: 24px; line-height: 1.8;
+    }
+    .cta-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .cta-primary {
+      padding: 12px 28px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none; border-radius: 8px;
+      color: #050810; font-family: var(--mono); font-size: 0.75rem;
+      font-weight: 700; letter-spacing: 0.08em;
+      cursor: pointer; text-decoration: none;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .cta-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .cta-ghost {
+      padding: 12px 28px;
+      background: transparent; border: 1px solid var(--border);
+      border-radius: 8px; color: var(--muted);
+      font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em;
+      cursor: pointer; text-decoration: none;
+      transition: all 0.15s;
+    }
+    .cta-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Nav bar ──────────────────────────────────────────── */
+    .aw-nav {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 20px; margin-bottom: 8px;
+      border-radius: var(--radius); max-width: 900px; margin: 0 auto 8px;
+    }
+    .aw-nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--sans); font-weight: 800; font-size: 1rem; color: #fff;
+    }
+    .aw-nav-brand img { width: 32px; height: 32px; border-radius: 7px; object-fit: cover; }
+    .aw-nav-sub { font-family: var(--mono); font-size: 0.58rem; color: var(--accent); letter-spacing: 0.12em; }
+    .aw-nav-links { display: flex; gap: 10px; }
+    .aw-nav-links a {
+      font-family: var(--mono); font-size: 0.65rem; color: var(--muted);
+      text-decoration: none; padding: 6px 12px; border-radius: 6px;
+      border: 1px solid transparent; transition: all 0.15s; letter-spacing: 0.06em;
+    }
+    .aw-nav-links a:hover { border-color: var(--border); color: var(--accent); }
+    .aw-nav-links a.active { border-color: rgba(0,220,180,0.3); color: var(--accent); background: rgba(0,220,180,0.06); }
+
+    /* Scroll reveal */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="aw-nav glass">
+  <div class="aw-nav-brand">
+    <img src="/logo.jpeg" onerror="this.style.display='none'"/>
+    <div>
+      <div>SwiftShield</div>
+      <div class="aw-nav-sub">SECURITY AWARENESS</div>
+    </div>
+  </div>
+  <div class="aw-nav-links">
+    <a href="/">Check-In</a>
+    <a href="/admin.html">Admin</a>
+    <a href="/awareness.html" class="active">Awareness</a>
+  </div>
+</nav>
+
+<div class="aw-page">
+
+  <!-- Hero -->
+  <div class="hero reveal">
+    <div class="hero-tag">⬡ SECURITY AWARENESS MODULE</div>
+    <h1>Why <span>Data Security</span><br>Matters at Work</h1>
+    <p>Every file downloaded, every login from home, every upload to the cloud — it all leaves a trace. Learn how insider threats happen, how access logging protects your team, and how to work safely from anywhere.</p>
+  </div>
+
+  <!-- Stats strip -->
+  <div class="stat-strip reveal">
+    <div class="stat-card red">
+      <div class="stat-number">60%</div>
+      <div class="stat-label">OF DATA BREACHES<br>INVOLVE AN INSIDER</div>
+    </div>
+    <div class="stat-card warn">
+      <div class="stat-number">$4.9M</div>
+      <div class="stat-label">AVERAGE COST OF A<br>DATA BREACH (2024)</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-number">74%</div>
+      <div class="stat-label">OF INCIDENTS INVOLVE<br>THE HUMAN ELEMENT</div>
+    </div>
+  </div>
+
+  <!-- Section 1: Data theft & insider threats -->
+  <div class="section reveal">
+    <div class="section-title">⬡ SECTION 01</div>
+    <div class="section-heading">Data Theft &amp; Insider Threats</div>
+    <div class="threat-grid">
+
+      <div class="threat-card">
+        <div class="threat-icon">💾</div>
+        <div class="threat-body">
+          <h3>Unauthorized Downloads</h3>
+          <p>An employee downloads client lists, financial reports, or source code before resigning — and shares them with a competitor. This is the most common form of insider data theft.</p>
+          <span class="threat-tag">HIGH RISK</span>
+        </div>
+      </div>
+
+      <div class="threat-card">
+        <div class="threat-icon">📤</div>
+        <div class="threat-body">
+          <h3>Accidental Sharing</h3>
+          <p>A shared Drive link sent to a personal email or wrong recipient can expose confidential data instantly — no malicious intent required. Mistakes are just as damaging.</p>
+          <span class="threat-tag">MEDIUM RISK</span>
+        </div>
+      </div>
+
+      <div class="threat-card">
+        <div class="threat-icon">🕵️</div>
+        <div class="threat-body">
+          <h3>Credential Misuse</h3>
+          <p>Using a colleague's login credentials to access files outside your role. Even if the colleague consents, this bypasses the audit trail and creates accountability gaps.</p>
+          <span class="threat-tag">HIGH RISK</span>
+        </div>
+      </div>
+
+      <div class="threat-card">
+        <div class="threat-icon">🌐</div>
+        <div class="threat-body">
+          <h3>Remote Access Abuse</h3>
+          <p>Accessing company files from personal devices or unsecured networks without approval. Unmonitored access from unknown locations is a major security blind spot.</p>
+          <span class="threat-tag">HIGH RISK</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Risk meter -->
+  <div class="risk-meter reveal">
+    <h3>📊 How Risk is Scored in SwiftShield</h3>
+    <div class="risk-row high">
+      <div class="risk-label">HIGH</div>
+      <div class="risk-bar-wrap"><div class="risk-bar"></div></div>
+      <div class="risk-pct">85%</div>
+    </div>
+    <div class="risk-row medium">
+      <div class="risk-label">MEDIUM</div>
+      <div class="risk-bar-wrap"><div class="risk-bar"></div></div>
+      <div class="risk-pct">55%</div>
+    </div>
+    <div class="risk-row low">
+      <div class="risk-label">LOW</div>
+      <div class="risk-bar-wrap"><div class="risk-bar"></div></div>
+      <div class="risk-pct">30%</div>
+    </div>
+    <div class="risk-note">
+      <strong style="color:var(--danger)">HIGH</strong> — Outside office with no justification, or suspicious automated access.<br>
+      <strong style="color:var(--warn)">MEDIUM</strong> — Outside office with a short or vague justification (under 20 characters).<br>
+      <strong style="color:var(--accent)">LOW</strong> — Inside office perimeter, or outside with a clear, detailed justification.
+    </div>
+  </div>
+
+  <!-- Section 2: Why logging matters -->
+  <div class="section reveal">
+    <div class="section-title">⬡ SECTION 02</div>
+    <div class="section-heading">Why Access Logging Matters</div>
+    <div class="timeline">
+
+      <div class="tl-item">
+        <div class="tl-step">STEP 01 — DETERRENCE</div>
+        <div class="tl-title">Employees behave differently when they know access is logged</div>
+        <div class="tl-desc">Studies show that simply informing employees that their actions are monitored reduces policy violations by over 50%. Logging doesn't just catch problems — it prevents them.</div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-step">STEP 02 — ACCOUNTABILITY</div>
+        <div class="tl-title">Every action has a name, a time, and a location attached to it</div>
+        <div class="tl-desc">When a file is leaked, SwiftShield's audit log can pinpoint exactly who downloaded it, from where, at what time, and whether a justification was given — making investigations fast and factual.</div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-step">STEP 03 — JUSTIFICATION</div>
+        <div class="tl-title">Requiring a reason forces employees to think before acting</div>
+        <div class="tl-desc">The act of typing a justification creates a psychological checkpoint. Employees are less likely to proceed with risky actions when they must explain their reason in writing.</div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-step">STEP 04 — RAPID RESPONSE</div>
+        <div class="tl-title">Admins get real-time alerts the moment a HIGH risk event occurs</div>
+        <div class="tl-desc">SwiftShield sends an immediate email alert when a high-risk access is detected — allowing the admin to investigate or respond before any damage spreads further.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Section 3: Safe remote work -->
+  <div class="section reveal">
+    <div class="section-title">⬡ SECTION 03</div>
+    <div class="section-heading">Safe Remote Work Practices</div>
+    <div class="tips-grid">
+
+      <div class="tip-card">
+        <span class="tip-emoji">🔐</span>
+        <div class="tip-title">Always Check In First</div>
+        <div class="tip-desc">Before accessing Google Drive from home or any outside location, complete a SwiftShield check-in. This takes 30 seconds and keeps your access legitimate and traceable.</div>
+        <span class="tip-do">✓ DO THIS</span>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-emoji">📶</span>
+        <div class="tip-title">Avoid Public Wi-Fi</div>
+        <div class="tip-desc">Coffee shops, airports, and hotel networks are common attack vectors. Always use a personal hotspot or VPN when accessing company files remotely.</div>
+        <span class="tip-do">✓ DO THIS</span>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-emoji">📝</span>
+        <div class="tip-title">Write Clear Justifications</div>
+        <div class="tip-desc">Vague reasons like "need file" are flagged as medium risk. Write specific justifications: "Downloading Q3 report to present to client meeting at 3pm".</div>
+        <span class="tip-do">✓ DO THIS</span>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-emoji">🚫</span>
+        <div class="tip-title">Don't Share Credentials</div>
+        <div class="tip-desc">Never log in using a colleague's account. Every person must use their own credentials so the audit trail remains accurate and accountable.</div>
+        <span class="tip-do">✓ DO THIS</span>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-emoji">🖥️</span>
+        <div class="tip-title">Use Company Devices</div>
+        <div class="tip-desc">Personal devices may lack security updates or have malware installed. Where possible, use your company-issued device when accessing sensitive Drive files.</div>
+        <span class="tip-do">✓ DO THIS</span>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-emoji">🔔</span>
+        <div class="tip-title">Report Suspicious Activity</div>
+        <div class="tip-desc">If you notice unusual file access, unexpected sharing notifications, or login alerts you don't recognise — report them to your admin immediately.</div>
+        <span class="tip-do">✓ DO THIS</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-box reveal">
+    <h2>Your actions are your digital signature</h2>
+    <p>SwiftShield logs every access so that in the event of a data incident,<br>the truth is always recoverable. Stay responsible. Stay accountable.</p>
+    <div class="cta-btns">
+      <a href="/" class="cta-primary">⬡ GO TO CHECK-IN</a>
+      <a href="/admin.html" class="cta-ghost">Admin Dashboard</a>
+    </div>
+  </div>
+
+</div>
+
+<script src="/awareness.js"></script>
+</body>
+</html>

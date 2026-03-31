@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SwiftShield — Secure Check-In</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .checkin-wrap {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .checkin-card {
+      width: 100%; max-width: 500px;
+      padding: 40px 36px;
+      position: relative; overflow: hidden;
+      animation: cardIn 0.5s cubic-bezier(0.16,1,0.3,1) both;
+    }
+    @keyframes cardIn { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+
+    .checkin-card::before, .checkin-card::after {
+      content:''; position:absolute; width:22px; height:22px;
+      border-color:var(--accent); border-style:solid; opacity:0.45;
+    }
+    .checkin-card::before { top:10px; left:10px; border-width:2px 0 0 2px; border-radius:3px 0 0 0; }
+    .checkin-card::after  { bottom:10px; right:10px; border-width:0 2px 2px 0; border-radius:0 0 3px 0; }
+
+    /* Progress dots */
+    .progress { display:flex; gap:6px; margin-bottom:22px; }
+    .prog-dot { height:3px; flex:1; border-radius:2px; background:rgba(0,220,180,0.12); transition:background 0.3s; }
+    .prog-dot.active { background:var(--accent); }
+    .prog-dot.done   { background:rgba(0,220,180,0.35); }
+
+    .step-label {
+      font-family:var(--mono); font-size:0.6rem; color:var(--muted);
+      letter-spacing:0.14em; margin-bottom:18px; text-transform:uppercase;
+    }
+
+    /* Location pill */
+    .loc-pill {
+      display:inline-flex; align-items:center; gap:7px;
+      padding:7px 14px; border-radius:20px;
+      font-family:var(--mono); font-size:0.65rem; letter-spacing:0.06em;
+      margin-bottom:20px; border:1px solid var(--border);
+      background:rgba(0,0,0,0.25); color:var(--muted);
+      transition:all 0.3s;
+    }
+    .loc-pill.inside  { border-color:rgba(0,220,180,0.3); color:#00e5a0; background:rgba(0,220,180,0.05); }
+    .loc-pill.outside { border-color:rgba(255,179,71,0.3); color:var(--warn); background:rgba(255,179,71,0.05); }
+    .loc-dot { width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0; }
+
+    /* Success */
+    #successScreen { display:none; text-align:center; padding:10px 0; }
+    .success-icon { font-size:3rem; margin-bottom:14px; animation:popIn 0.5s cubic-bezier(0.16,1,0.3,1); }
+    @keyframes popIn { from{transform:scale(0.3);opacity:0} to{transform:scale(1);opacity:1} }
+    .success-title { font-family:var(--sans); font-weight:800; font-size:1.35rem; color:#00e5a0; margin-bottom:6px; }
+    .success-sub { font-family:var(--mono); font-size:0.7rem; color:var(--muted); margin-bottom:22px; line-height:1.8; }
+
+    .risk-pill {
+      display:inline-block; padding:5px 16px; border-radius:6px;
+      font-family:var(--mono); font-size:0.68rem; letter-spacing:0.1em; font-weight:700; margin-bottom:22px;
+    }
+    .risk-pill.low    { background:rgba(0,229,160,0.1); color:#00e5a0; border:1px solid rgba(0,229,160,0.25); }
+    .risk-pill.medium { background:rgba(255,179,71,0.1); color:var(--warn); border:1px solid rgba(255,179,71,0.25); }
+    .risk-pill.high   { background:rgba(255,77,109,0.1); color:var(--danger); border:1px solid rgba(255,77,109,0.25); }
+
+    .drive-btn {
+      display:flex; align-items:center; justify-content:center; gap:10px;
+      width:100%; padding:14px;
+      background:linear-gradient(135deg, #4285f4, #34a853);
+      border:none; border-radius:9px;
+      color:#fff; font-family:var(--mono); font-size:0.75rem;
+      font-weight:700; letter-spacing:0.08em;
+      cursor:pointer; text-decoration:none;
+      transition:opacity 0.15s, transform 0.1s;
+    }
+    .drive-btn:hover { opacity:0.9; transform:translateY(-1px); }
+
+    .btn-again {
+      width:100%; padding:11px; margin-top:10px;
+      background:transparent; border:1px solid var(--border);
+      border-radius:9px; color:var(--muted);
+      font-family:var(--mono); font-size:0.7rem; letter-spacing:0.06em;
+      cursor:pointer; transition:all 0.15s;
+    }
+    .btn-again:hover { border-color:var(--accent); color:var(--accent); }
+
+    /* Error hint */
+    .err-hint { font-family:var(--mono); font-size:0.65rem; color:var(--danger); margin-top:5px; display:none; }
+    .err-hint.show { display:block; }
+    .input.err { border-color:var(--danger) !important; }
+
+    /* Submit btn */
+    .submit-btn {
+      width:100%; padding:13px; margin-top:6px;
+      background:linear-gradient(135deg, var(--accent), var(--accent2));
+      border:none; border-radius:9px;
+      color:#050810; font-family:var(--mono); font-size:0.78rem;
+      font-weight:700; letter-spacing:0.08em;
+      cursor:pointer; transition:opacity 0.15s, transform 0.1s;
+    }
+    .submit-btn:hover:not(:disabled) { opacity:0.9; transform:translateY(-1px); }
+    .submit-btn:disabled { opacity:0.45; cursor:not-allowed; }
+
+    .back-btn {
+      width:100%; padding:11px; margin-top:10px;
+      background:transparent; border:1px solid var(--border);
+      border-radius:9px; color:var(--muted);
+      font-family:var(--mono); font-size:0.7rem; letter-spacing:0.06em;
+      cursor:pointer; transition:all 0.15s;
+    }
+    .back-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+    .footer-note {
+      margin-top:22px; font-family:var(--mono); font-size:0.58rem;
+      color:var(--muted); text-align:center; line-height:1.8; letter-spacing:0.04em;
+    }
+
+    .admin-link {
+      display:block; text-align:center; margin-top:14px;
+      font-family:var(--mono); font-size:0.6rem; color:var(--muted);
+      text-decoration:none; letter-spacing:0.08em; transition:color 0.15s;
+    }
+    .admin-link:hover { color:var(--accent); }
+
+    @media(max-width:480px) { .checkin-card { padding:28px 18px; } }
+  </style>
+</head>
+<body>
+<div class="checkin-wrap">
+  <div class="checkin-card glass">
+
+    <div class="card-brand">
+      <img src="/logo.jpeg" class="brand-icon" onerror="this.style.display='none'"/>
+      <div>
+        <div class="brand-name">SwiftShield</div>
+        <div class="brand-sub">SECURE ACCESS CHECK-IN</div>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <!-- FORM -->
+    <div id="formScreen">
+      <div class="progress">
+        <div class="prog-dot active" id="pd1"></div>
+        <div class="prog-dot" id="pd2"></div>
+        <div class="prog-dot" id="pd3"></div>
+      </div>
+      <div class="step-label" id="stepLabel">STEP 1 OF 3 — IDENTIFY YOURSELF</div>
+
+      <!-- Step 1 -->
+      <div id="s1">
+        <div class="field">
+          <label class="label" for="userId">YOUR EMAIL / USER ID</label>
+          <input type="email" id="userId" class="input" placeholder="you@swiftshield.in" autocomplete="email" inputmode="email"/>
+          <div class="err-hint" id="errUserId">Please enter your email or user ID</div>
+        </div>
+        <div class="field">
+          <label class="label" for="actionType">WHAT ARE YOU DOING?</label>
+          <select id="actionType" class="input">
+            <option value="login">Accessing Google Drive</option>
+            <option value="download">Downloading a file</option>
+            <option value="upload">Uploading a file</option>
+          </select>
+        </div>
+        <button class="submit-btn" id="s1Next">NEXT →</button>
+      </div>
+
+      <!-- Step 2 -->
+      <div id="s2" style="display:none">
+        <div class="field">
+          <label class="label" for="fileName">FILE NAME <span style="opacity:0.4">(optional)</span></label>
+          <input type="text" id="fileName" class="input" placeholder="e.g. Q4-financial-report.xlsx"/>
+        </div>
+
+        <div id="locPill" class="loc-pill">
+          <span class="loc-dot"></span>
+          <span id="locText">Detecting your location…</span>
+        </div>
+
+        <div id="justWrap" style="display:none">
+          <div class="field">
+            <label class="label" for="justification">
+              JUSTIFICATION REQUIRED &nbsp;<span style="color:var(--warn)">— OUTSIDE OFFICE</span>
+            </label>
+            <textarea id="justification" class="input" rows="4"
+              placeholder="Explain why you are accessing Google Drive from this location…"
+              style="resize:vertical; min-height:90px; font-family:var(--mono); font-size:0.82rem;"></textarea>
+            <div class="err-hint" id="errJust">Please provide a reason (at least 20 characters)</div>
+          </div>
+        </div>
+
+        <button class="submit-btn" id="s2Submit" disabled>DETECTING LOCATION…</button>
+        <button class="back-btn" id="s2Back">← BACK</button>
+      </div>
+
+      <!-- Step 3 loading -->
+      <div id="s3" style="display:none; text-align:center; padding:28px 0;">
+        <div style="font-size:2.2rem; animation:pulse 1s ease-in-out infinite; color:var(--accent); margin-bottom:12px;">⬡</div>
+        <div style="font-family:var(--mono); font-size:0.7rem; color:var(--muted); letter-spacing:0.1em;">LOGGING ACCESS…</div>
+      </div>
+    </div>
+
+    <!-- SUCCESS -->
+    <div id="successScreen">
+      <div class="success-icon">✅</div>
+      <div class="success-title">Access Logged</div>
+      <div class="success-sub" id="successSub">Your access has been recorded.<br>You can now open Google Drive.</div>
+      <div id="riskPill" class="risk-pill low" style="margin-bottom:22px;">RISK: LOW</div>
+      <a href="https://drive.google.com" target="_blank" class="drive-btn">
+        <svg width="18" height="18" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+          <path d="M43.65 25L29.9 1.2C28.55 2 27.4 3.1 26.6 4.5L1.2 49.5C.4 50.9 0 52.45 0 54h27.55z" fill="#00ac47"/>
+          <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.65l5.9 12.65z" fill="#ea4335"/>
+          <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+          <path d="M59.65 54H27.55L13.8 77.8c1.35.8 2.9 1.2 4.5 1.2h50.3c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+          <path d="M73.4 27.5l-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25l16.1 29h27.5c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+        </svg>
+        OPEN GOOGLE DRIVE
+      </a>
+      <button class="btn-again" id="logAgain">Log Another Action</button>
+    </div>
+
+    <p class="footer-note">
+      All access is logged for security audit.<br>
+      Access from outside the office requires justification.
+    </p>
+    <a href="/admin.html" class="admin-link">⬡ ADMIN DASHBOARD</a>
+    <a href="/awareness.html" class="admin-link" style="margin-top:6px">⬡ SECURITY AWARENESS</a>
+  </div>
+</div>
+
+<div id="toasts" class="toasts"></div>
+
+<script src="/checkin.js"></script>
+</body>
+</html>
