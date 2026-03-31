@@ -12,7 +12,7 @@ const helmet     = require('helmet');
 const rateLimit  = require('express-rate-limit');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const validator  = require('validator');
-const nodemailer = require('nodemailer');
+let nodemailer; try { nodemailer = require('nodemailer'); } catch(_) { console.warn('nodemailer not installed — email alerts disabled'); }
 require('dotenv').config();
 
 const app  = express();
