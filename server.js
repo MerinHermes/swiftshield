@@ -1,7 +1,6 @@
 /**
  * SwiftShield v3 — Web-only edition
- * Check-in page + admin dashboard + email alerts
- * No Chrome extension required
+ * Check-in page + admin dashboard + email alerts + Google Drive export
  */
 
 const express    = require('express');
@@ -12,12 +11,49 @@ const helmet     = require('helmet');
 const rateLimit  = require('express-rate-limit');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const validator  = require('validator');
-let nodemailer; try { nodemailer = require('nodemailer'); } catch(_) { console.warn('nodemailer not installed — email alerts disabled'); }
+const nodemailer = require('nodemailer');
+const { google } = require('googleapis');
+const fs         = require('fs');
 require('dotenv').config();
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+// ── Google OAuth2 Setup ───────────────────────────────────────────────────────
+const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const GOOGLE_REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI || 'https://swiftshield.in/auth/google/callback';
+const TOKEN_PATH           = path.join(__dirname, 'google_token.json');
+const DRIVE_FOLDER_ID      = process.env.GOOGLE_DRIVE_FOLDER_ID || null; // optional: save to specific folder
+
+function getOAuth2Client() {
+  return new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
+}
+
+function loadSavedToken() {
+  try {
+    if (fs.existsSync(TOKEN_PATH)) {
+      const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+      return token;
+    }
+  } catch { /* no token yet */ }
+  return null;
+}
+
+function getAuthorizedClient() {
+  const token = loadSavedToken();
+  if (!token) return null;
+  const oauth2Client = getOAuth2Client();
+  oauth2Client.setCredentials(token);
+  // Auto-refresh: save new token if refreshed
+  oauth2Client.on('tokens', (newTokens) => {
+    const merged = { ...token, ...newTokens };
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(merged));
+  });
+  return oauth2Client;
+}
+
+// ── Helmet / CORS / Body Parser ───────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -42,9 +78,11 @@ app.use(cors({
 app.use(bodyParser.json({ limit: '16kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const logLimiter   = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: 'too_many_requests' } });
-const adminLimiter = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
+const logLimiter   = rateLimit({ windowMs: 60_000, max: 30,  standardHeaders: true, legacyHeaders: false, message: { error: 'too_many_requests' } });
+const adminLimiter = rateLimit({ windowMs: 60_000, max: 60,  standardHeaders: true, legacyHeaders: false });
+const authLimiter  = rateLimit({ windowMs: 60_000, max: 10,  standardHeaders: true, legacyHeaders: false });
 
+// ── MongoDB ───────────────────────────────────────────────────────────────────
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017';
 const DB_NAME   = process.env.MONGO_DB  || 'swiftshield';
 const ADMIN_KEY = process.env.ADMIN_API_KEY || 'changeme-in-production';
@@ -73,10 +111,7 @@ let logsCol, allowlistCol;
   }
 })();
 
-// ── Email alerts via Gmail / Google Workspace SMTP ────────────────────────────
-// ALERT_EMAIL_USER = your@swiftshield.in
-// ALERT_EMAIL_PASS = App Password from Google Account → Security → App Passwords
-// ALERT_EMAIL_TO   = admin@swiftshield.in (who receives alerts)
+// ── Email alerts ──────────────────────────────────────────────────────────────
 let mailer = null;
 if (process.env.ALERT_EMAIL_USER && process.env.ALERT_EMAIL_PASS) {
   mailer = nodemailer.createTransport({
@@ -161,6 +196,127 @@ function requireAdminKey(req, res, next) {
   if (!key || key !== ADMIN_KEY) return res.status(401).json({ error: 'unauthorized' });
   next();
 }
+
+// ── Google OAuth2 Routes ──────────────────────────────────────────────────────
+
+// Step 1: Admin visits this URL to connect Google Drive
+// Protected by admin key: GET /auth/google?adminKey=YOUR_KEY
+app.get('/auth/google', authLimiter, requireAdminKey, (req, res) => {
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    return res.status(500).json({ error: 'Google OAuth not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env' });
+  }
+  const oauth2Client = getOAuth2Client();
+  const url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',   // gets refresh_token so it works long-term
+    prompt: 'consent',        // forces refresh_token even if already authorized
+    scope: ['https://www.googleapis.com/auth/drive.file']
+  });
+  res.redirect(url);
+});
+
+// Step 2: Google redirects here after user approves
+app.get('/auth/google/callback', authLimiter, async (req, res) => {
+  const { code, error } = req.query;
+  if (error) return res.status(400).send(`Google auth error: ${error}`);
+  if (!code)  return res.status(400).send('No authorization code received.');
+
+  try {
+    const oauth2Client = getOAuth2Client();
+    const { tokens } = await oauth2Client.getToken(code);
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
+    console.log('✅  Google Drive token saved →', TOKEN_PATH);
+    res.send(`
+      <html><body style="font-family:monospace;background:#0d1117;color:#58d68d;padding:40px">
+        <h2>✅ Google Drive Connected!</h2>
+        <p>SwiftShield can now export logs to your Google Drive.</p>
+        <p>You can now use <strong>POST /api/export-to-drive</strong> from the admin dashboard.</p>
+        <p><a href="/admin.html" style="color:#58a6ff">← Back to Dashboard</a></p>
+      </body></html>
+    `);
+  } catch (err) {
+    console.error('Token exchange failed:', err.message);
+    res.status(500).send('Failed to exchange token: ' + err.message);
+  }
+});
+
+// Check if Drive is connected
+app.get('/api/drive/status', adminLimiter, requireAdminKey, (_req, res) => {
+  const token = loadSavedToken();
+  res.json({
+    connected: !!token,
+    authUrl: `/auth/google?adminKey=${ADMIN_KEY}`
+  });
+});
+
+// ── POST /api/export-to-drive ─────────────────────────────────────────────────
+// Exports all logs as a CSV file and uploads it to Google Drive
+app.post('/api/export-to-drive', adminLimiter, requireAdminKey, async (req, res) => {
+  const oauth2Client = getAuthorizedClient();
+  if (!oauth2Client) {
+    return res.status(401).json({
+      error: 'Google Drive not connected. Visit /auth/google to connect.',
+      authUrl: `/auth/google?adminKey=${ADMIN_KEY}`
+    });
+  }
+
+  try {
+    // Fetch logs from MongoDB
+    const filter = {};
+    if (req.query.risk)    filter.risk    = req.query.risk;
+    if (req.query.user_id) filter.user_id = req.query.user_id;
+    if (req.query.action)  filter.action  = req.query.action;
+
+    const logs = await logsCol.find(filter).sort({ timestamp: -1 }).limit(5000).toArray();
+
+    // Build CSV
+    const headers = ['id','timestamp','action','user_id','risk','outside_office','file_name','file_size','ip','latitude','longitude','justification','device_info'];
+    const csvRows = [
+      headers.join(','),
+      ...logs.map(log => headers.map(h => {
+        let val = h === 'id' ? log._id.toString() : log[h];
+        if (val === undefined || val === null) val = '';
+        val = String(val).replace(/"/g, '""');
+        return `"${val}"`;
+      }).join(','))
+    ];
+    const csvContent = csvRows.join('\n');
+
+    // Upload to Google Drive
+    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+    const fileName = `swiftshield-logs-${new Date().toISOString().slice(0,10)}.csv`;
+
+    const fileMetadata = { name: fileName, mimeType: 'text/csv' };
+    if (DRIVE_FOLDER_ID) fileMetadata.parents = [DRIVE_FOLDER_ID];
+
+    const { Readable } = require('stream');
+    const response = await drive.files.create({
+      requestBody: fileMetadata,
+      media: { mimeType: 'text/csv', body: Readable.from([csvContent]) },
+      fields: 'id, name, webViewLink'
+    });
+
+    console.log(`✅  Drive export: ${response.data.name} (${logs.length} rows)`);
+    res.json({
+      success: true,
+      fileName: response.data.name,
+      fileId:   response.data.id,
+      viewLink: response.data.webViewLink,
+      rows:     logs.length
+    });
+
+  } catch (err) {
+    console.error('Drive export failed:', err.message);
+    // If token expired and refresh failed
+    if (err.message?.includes('invalid_grant') || err.message?.includes('Token has been expired')) {
+      fs.unlinkSync(TOKEN_PATH);
+      return res.status(401).json({
+        error: 'Google token expired. Please reconnect.',
+        authUrl: `/auth/google?adminKey=${ADMIN_KEY}`
+      });
+    }
+    res.status(500).json({ error: 'drive_export_failed', detail: err.message });
+  }
+});
 
 // ── POST /log ─────────────────────────────────────────────────────────────────
 app.post('/log', logLimiter, async (req, res) => {
