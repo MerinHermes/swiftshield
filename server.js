@@ -225,7 +225,8 @@ app.get('/auth/google', authLimiter, requireAdminKey, (req, res) => {
     scope: [
       'https://www.googleapis.com/auth/drive.file',
       'https://www.googleapis.com/auth/drive.readonly',
-      'https://www.googleapis.com/auth/drive.metadata.readonly'
+      'https://www.googleapis.com/auth/drive.metadata.readonly',
+      'https://www.googleapis.com/auth/admin.reports.audit.readonly'
     ]
   });
   res.redirect(url);
@@ -479,6 +480,113 @@ app.post('/api/drive/webhook', async (req, res) => {
     }
   } catch (err) {
     console.error('Drive webhook error:', err.message);
+  }
+});
+
+// ── Admin Reports API — Poll Drive download/view events ───────────────────────
+const POLL_EVENTS = ['download', 'view']; // event names from Admin SDK
+
+async function pollDriveReports() {
+  try {
+    const oauth2Client = await getAuthorizedClient();
+    if (!oauth2Client) return;
+
+    await ensureDb();
+    const db = client.db(DB_NAME);
+
+    // Load last poll time from MongoDB (default: 6 minutes ago)
+    const stateDoc = await db.collection('config').findOne({ _id: 'reports_poll' });
+    const lastPoll = stateDoc?.lastPoll || new Date(Date.now() - 6 * 60 * 1000);
+
+    const reports = google.admin({ version: 'reports_v1', auth: oauth2Client });
+
+    const response = await reports.activities.list({
+      userKey:         'all',
+      applicationName: 'drive',
+      startTime:       new Date(lastPoll).toISOString(),
+      maxResults:      200
+    });
+
+    const activities = response.data.items || [];
+    let logged = 0;
+
+    for (const activity of activities) {
+      const actor    = activity.actor?.email || 'unknown';
+      const events   = activity.events || [];
+      const time     = activity.id?.time ? new Date(activity.id.time) : new Date();
+
+      for (const event of events) {
+        const eventName = (event.name || '').toLowerCase();
+        if (!POLL_EVENTS.includes(eventName)) continue;
+
+        // Extract file details from event parameters
+        const params    = {};
+        (event.parameters || []).forEach(p => { params[p.name] = p.value || p.boolValue || p.intValue || null; });
+
+        const fileName  = params['doc_title'] || params['doc_id'] || 'unknown';
+        const fileId    = params['doc_id'] || null;
+        const ownerEmail = params['owner'] || null;
+
+        // Skip if already logged (dedup by fileId + actor + time)
+        const dupKey = fileId + '-' + actor + '-' + time.toISOString() + '-' + eventName;
+        const exists = await db.collection('config').findOne({ _id: 'report_seen_' + dupKey });
+        if (exists) continue;
+
+        // Mark as seen
+        await db.collection('config').insertOne({
+          _id: 'report_seen_' + dupKey,
+          createdAt: new Date()
+        });
+
+        const action = eventName === 'download' ? 'download' : 'view';
+        const doc = {
+          action,
+          user_id:       actor,
+          file_name:     fileName,
+          file_size:     null,
+          source:        'google_drive',
+          drive_file_id: fileId,
+          drive_owner:   ownerEmail,
+          ip:            null,
+          user_agent:    'Google Drive',
+          device_info:   'Drive: ' + eventName,
+          latitude:      null,
+          longitude:     null,
+          outside_office: true,
+          justification: null,
+          risk:          'medium'
+        };
+
+        await insertLog(doc);
+        logged++;
+        console.log('📥  Drive ' + eventName + ' logged: "' + fileName + '" by ' + actor);
+      }
+    }
+
+    // Save last poll time
+    await db.collection('config').updateOne(
+      { _id: 'reports_poll' },
+      { $set: { lastPoll: new Date(), logged, updatedAt: new Date() } },
+      { upsert: true }
+    );
+
+    if (logged > 0) console.log('✅  Reports poll: ' + logged + ' new events logged');
+
+  } catch (err) {
+    console.error('Reports poll error:', err.message);
+  }
+}
+
+// Poll every 5 minutes
+setInterval(pollDriveReports, 5 * 60 * 1000);
+
+// Manual trigger endpoint (admin only)
+app.post('/api/drive/poll', adminLimiter, requireAdminKey, async (_req, res) => {
+  try {
+    await pollDriveReports();
+    res.json({ success: true, message: 'Poll complete. Check /api/logs for new download/view events.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
