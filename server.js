@@ -539,6 +539,26 @@ async function pollDriveReports() {
         });
 
         const action = eventName === 'download' ? 'download' : 'view';
+
+        // Cross-reference last known location from SwiftShield check-ins (within 24h)
+        const lastCheckin = await logsCol.findOne(
+          {
+            user_id: actor,
+            action: 'login',
+            latitude: { $ne: null },
+            timestamp: { $gte: new Date(time.getTime() - 24 * 60 * 60 * 1000) }
+          },
+          { sort: { timestamp: -1 } }
+        );
+
+        const latitude       = lastCheckin ? lastCheckin.latitude  : null;
+        const longitude      = lastCheckin ? lastCheckin.longitude : null;
+        const outside_office = lastCheckin ? lastCheckin.outside_office : true;
+        const risk           = outside_office ? 'high' : 'medium';
+        const location_note  = lastCheckin
+          ? 'Location inferred from check-in at ' + new Date(lastCheckin.timestamp).toLocaleTimeString()
+          : 'Location unknown - no recent check-in';
+
         const doc = {
           action,
           user_id:       actor,
@@ -547,19 +567,19 @@ async function pollDriveReports() {
           source:        'google_drive',
           drive_file_id: fileId,
           drive_owner:   ownerEmail,
-          ip:            null,
+          ip:            lastCheckin ? lastCheckin.ip : null,
           user_agent:    'Google Drive',
-          device_info:   'Drive: ' + eventName,
-          latitude:      null,
-          longitude:     null,
-          outside_office: true,
+          device_info:   'Drive: ' + eventName + ' | ' + location_note,
+          latitude,
+          longitude,
+          outside_office,
           justification: null,
-          risk:          'medium'
+          risk
         };
 
         await insertLog(doc);
         logged++;
-        console.log('📥  Drive ' + eventName + ' logged: "' + fileName + '" by ' + actor);
+        console.log('📥  Drive ' + eventName + ' logged: "' + fileName + '" by ' + actor + ' | outside=' + outside_office);
       }
     }
 
