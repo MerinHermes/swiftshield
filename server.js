@@ -544,6 +544,7 @@ app.post('/log/action', logLimiter, async (req, res) => {
 // ── GET /api/logs ─────────────────────────────────────────────────────────────
 app.get('/api/logs', adminLimiter, requireAdminKey, async (req, res) => {
   try {
+    await ensureDb();
     const limit = Math.min(parseInt(req.query.limit||'200',10), 1000);
     const skip  = parseInt(req.query.skip||'0', 10);
     const f = {};
@@ -561,6 +562,7 @@ app.get('/api/logs', adminLimiter, requireAdminKey, async (req, res) => {
 // ── GET /api/stats ────────────────────────────────────────────────────────────
 app.get('/api/stats', adminLimiter, requireAdminKey, async (_req, res) => {
   try {
+    await ensureDb();
     const [total, highRisk, externalAccess, byAction] = await Promise.all([
       logsCol.countDocuments({}),
       logsCol.countDocuments({ risk:'high' }),
@@ -574,6 +576,7 @@ app.get('/api/stats', adminLimiter, requireAdminKey, async (_req, res) => {
 // ── DELETE /api/logs/:id ──────────────────────────────────────────────────────
 app.delete('/api/logs/:id', adminLimiter, requireAdminKey, async (req, res) => {
   try {
+    await ensureDb();
     const { id } = req.params;
     if (!ObjectId.isValid(id)) return res.status(400).json({ error:'invalid_id' });
     await logsCol.deleteOne({ _id: new ObjectId(id) });
@@ -584,6 +587,7 @@ app.delete('/api/logs/:id', adminLimiter, requireAdminKey, async (req, res) => {
 // ── DELETE /api/logs (bulk) ───────────────────────────────────────────────────
 app.delete('/api/logs', adminLimiter, requireAdminKey, async (req, res) => {
   try {
+    await ensureDb();
     const f = {};
     if (req.query.risk)   f.risk      = req.query.risk;
     if (req.query.before) f.timestamp = { $lt: new Date(req.query.before) };
@@ -595,6 +599,7 @@ app.delete('/api/logs', adminLimiter, requireAdminKey, async (req, res) => {
 // ── Allowlist ─────────────────────────────────────────────────────────────────
 app.get('/api/allowlist', adminLimiter, requireAdminKey, async (req, res) => {
   try {
+    await ensureDb();
     const f = req.query.type ? { type: req.query.type } : {};
     const rows = await allowlistCol.find(f).sort({ createdAt:-1 }).toArray();
     res.json({ rows: rows.map(({ _id,...r }) => ({ id:_id.toString(),...r })), total: rows.length });
@@ -602,6 +607,7 @@ app.get('/api/allowlist', adminLimiter, requireAdminKey, async (req, res) => {
 });
 
 app.post('/api/allowlist', adminLimiter, requireAdminKey, async (req, res) => {
+  await ensureDb();
   const { type } = req.body||{};
   const value = sanitise(req.body?.value, 200);
   const note  = sanitise(req.body?.note,  300);
