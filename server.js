@@ -215,9 +215,13 @@ app.get('/auth/google', authLimiter, requireAdminKey, (req, res) => {
   }
   const oauth2Client = getOAuth2Client();
   const url = oauth2Client.generateAuthUrl({
-    access_type: 'offline',   // gets refresh_token so it works long-term
-    prompt: 'consent',        // forces refresh_token even if already authorized
-    scope: ['https://www.googleapis.com/auth/drive.file']
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: [
+      'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/drive.readonly',
+      'https://www.googleapis.com/auth/drive.metadata.readonly'
+    ]
   });
   res.redirect(url);
 });
@@ -323,6 +327,153 @@ app.post('/api/export-to-drive', adminLimiter, requireAdminKey, async (req, res)
       });
     }
     res.status(500).json({ error: 'drive_export_failed', detail: err.message });
+  }
+});
+
+// ── POST /api/drive/watch — Register webhook with Google Drive ────────────────
+// Call this once after connecting Google to start watching the shared folder.
+// Google Drive webhooks expire after 1 week — call again to renew.
+app.post('/api/drive/watch', adminLimiter, requireAdminKey, async (req, res) => {
+  const oauth2Client = await getAuthorizedClient();
+  if (!oauth2Client) return res.status(401).json({ error: 'Google Drive not connected.' });
+  if (!DRIVE_FOLDER_ID) return res.status(400).json({ error: 'GOOGLE_DRIVE_FOLDER_ID not set in env.' });
+
+  try {
+    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+
+    // Get current folder pageToken (so we only get NEW changes, not historical)
+    const startPageToken = await drive.changes.getStartPageToken({});
+    const pageToken = startPageToken.data.startPageToken;
+
+    // Save pageToken to MongoDB so webhook handler can use it
+    const db = client.db(DB_NAME);
+    await db.collection('config').updateOne(
+      { _id: 'drive_watch' },
+      { $set: { pageToken, folderId: DRIVE_FOLDER_ID, updatedAt: new Date() } },
+      { upsert: true }
+    );
+
+    // Register the webhook channel with Google
+    const channelId = `swiftshield-${Date.now()}`;
+    const webhookUrl = `${process.env.ALLOWED_ORIGINS?.split(',')[0] || 'https://swiftshield.in'}/api/drive/webhook`;
+
+    const response = await drive.changes.watch({
+      pageToken,
+      requestBody: {
+        id:      channelId,
+        type:    'web_hook',
+        address: webhookUrl,
+        expiration: String(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+      }
+    });
+
+    // Save channel info so we can stop/renew it later
+    await db.collection('config').updateOne(
+      { _id: 'drive_channel' },
+      { $set: { channelId, resourceId: response.data.resourceId, expiration: response.data.expiration, updatedAt: new Date() } },
+      { upsert: true }
+    );
+
+    console.log('✅  Drive webhook registered:', webhookUrl);
+    res.json({
+      success:    true,
+      channelId,
+      webhookUrl,
+      expiration: new Date(parseInt(response.data.expiration)).toISOString(),
+      note:       'Webhook expires in 7 days. Call POST /api/drive/watch again to renew.'
+    });
+  } catch (err) {
+    console.error('Drive watch failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/drive/webhook — Receive push notifications from Google Drive ────
+// Google pings this every time any file in Drive changes.
+// We then look up what changed and log it to SwiftShield.
+app.post('/api/drive/webhook', async (req, res) => {
+  // Always respond 200 immediately — Google will retry if we don't
+  res.sendStatus(200);
+
+  // Ignore sync/heartbeat messages
+  const state = req.headers['x-goog-resource-state'];
+  if (!state || state === 'sync') return;
+
+  try {
+    const oauth2Client = await getAuthorizedClient();
+    if (!oauth2Client) return;
+
+    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+    const db    = client.db(DB_NAME);
+
+    // Get saved pageToken
+    const watchDoc = await db.collection('config').findOne({ _id: 'drive_watch' });
+    if (!watchDoc?.pageToken) return;
+
+    // Fetch what changed since last pageToken
+    const changesRes = await drive.changes.list({
+      pageToken:                watchDoc.pageToken,
+      fields:                   'nextPageToken, newStartPageToken, changes(type, changeType, fileId, file(id, name, size, mimeType, owners, lastModifyingUser, modifiedTime, parents, trashed))',
+      includeItemsFromAllDrives: true,
+      supportsAllDrives:         true,
+      pageSize:                  50
+    });
+
+    const changes = changesRes.data.changes || [];
+
+    // Save updated pageToken for next time
+    const newPageToken = changesRes.data.newStartPageToken || changesRes.data.nextPageToken;
+    if (newPageToken) {
+      await db.collection('config').updateOne(
+        { _id: 'drive_watch' },
+        { $set: { pageToken: newPageToken, updatedAt: new Date() } }
+      );
+    }
+
+    for (const change of changes) {
+      const file = change.file;
+      if (!file || file.trashed) continue;
+
+      // Only care about files inside our watched folder
+      const inFolder = file.parents && file.parents.includes(DRIVE_FOLDER_ID);
+      if (!inFolder) continue;
+
+      // Determine action: 'upload' for new/modified files
+      const action = 'upload';
+
+      // Who did it — use lastModifyingUser email as user_id
+      const user_id   = file.lastModifyingUser?.emailAddress || file.owners?.[0]?.emailAddress || 'unknown';
+      const file_name = file.name || 'unknown';
+      const file_size = file.size ? parseInt(file.size) : null;
+
+      // Log it to SwiftShield
+      const doc = {
+        action,
+        user_id,
+        file_name,
+        file_size,
+        source:        'google_drive',
+        drive_file_id: file.id,
+        ip:            null,
+        user_agent:    'Google Drive',
+        device_info:   `Drive: ${file.mimeType || 'unknown type'}`,
+        latitude:      null,
+        longitude:     null,
+        outside_office: true,  // Drive activity is always remote
+        justification: null,
+        risk:          'medium' // Drive uploads without justification = medium risk
+      };
+
+      await insertLog(doc);
+      console.log(`📁  Drive activity logged: ${action} "${file_name}" by ${user_id}`);
+
+      // Send high-risk alert if it's an unknown user
+      if (!['admin@swiftshield.in', process.env.ALERT_EMAIL_USER].includes(user_id)) {
+        sendAlert({ ...doc, risk: 'high' });
+      }
+    }
+  } catch (err) {
+    console.error('Drive webhook error:', err.message);
   }
 });
 
