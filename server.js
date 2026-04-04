@@ -13,42 +13,50 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const validator  = require('validator');
 const nodemailer = require('nodemailer');
 const { google } = require('googleapis');
-const fs         = require('fs');
 require('dotenv').config();
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// ── Google OAuth2 Setup ───────────────────────────────────────────────────────
+// ── Google OAuth2 Setup (token stored in MongoDB — works on Vercel) ───────────
 const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI || 'https://swiftshield.in/auth/google/callback';
-const TOKEN_PATH           = path.join(__dirname, 'google_token.json');
-const DRIVE_FOLDER_ID      = process.env.GOOGLE_DRIVE_FOLDER_ID || null; // optional: save to specific folder
+const DRIVE_FOLDER_ID      = process.env.GOOGLE_DRIVE_FOLDER_ID || null;
 
 function getOAuth2Client() {
   return new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
 }
 
-function loadSavedToken() {
-  try {
-    if (fs.existsSync(TOKEN_PATH)) {
-      const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
-      return token;
-    }
-  } catch { /* no token yet */ }
-  return null;
+// Save token to MongoDB (works on Vercel serverless)
+async function saveToken(token) {
+  const db = client.db(DB_NAME);
+  await db.collection('config').updateOne(
+    { _id: 'google_token' },
+    { $set: { token, updatedAt: new Date() } },
+    { upsert: true }
+  );
 }
 
-function getAuthorizedClient() {
-  const token = loadSavedToken();
+// Load token from MongoDB
+async function loadToken() {
+  try {
+    const db  = client.db(DB_NAME);
+    const doc = await db.collection('config').findOne({ _id: 'google_token' });
+    return doc?.token || null;
+  } catch { return null; }
+}
+
+// Returns an authorized OAuth2 client, or null if not connected
+async function getAuthorizedClient() {
+  const token = await loadToken();
   if (!token) return null;
   const oauth2Client = getOAuth2Client();
   oauth2Client.setCredentials(token);
-  // Auto-refresh: save new token if refreshed
-  oauth2Client.on('tokens', (newTokens) => {
+  // Auto-save refreshed tokens back to MongoDB
+  oauth2Client.on('tokens', async (newTokens) => {
     const merged = { ...token, ...newTokens };
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(merged));
+    await saveToken(merged);
   });
   return oauth2Client;
 }
@@ -223,8 +231,8 @@ app.get('/auth/google/callback', authLimiter, async (req, res) => {
   try {
     const oauth2Client = getOAuth2Client();
     const { tokens } = await oauth2Client.getToken(code);
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
-    console.log('✅  Google Drive token saved →', TOKEN_PATH);
+    await saveToken(tokens);
+    console.log('✅  Google Drive token saved → MongoDB');
     res.send(`
       <html><body style="font-family:monospace;background:#0d1117;color:#58d68d;padding:40px">
         <h2>✅ Google Drive Connected!</h2>
@@ -240,8 +248,8 @@ app.get('/auth/google/callback', authLimiter, async (req, res) => {
 });
 
 // Check if Drive is connected
-app.get('/api/drive/status', adminLimiter, requireAdminKey, (_req, res) => {
-  const token = loadSavedToken();
+app.get('/api/drive/status', adminLimiter, requireAdminKey, async (_req, res) => {
+  const token = await loadToken();
   res.json({
     connected: !!token,
     authUrl: `/auth/google?adminKey=${ADMIN_KEY}`
@@ -251,7 +259,7 @@ app.get('/api/drive/status', adminLimiter, requireAdminKey, (_req, res) => {
 // ── POST /api/export-to-drive ─────────────────────────────────────────────────
 // Exports all logs as a CSV file and uploads it to Google Drive
 app.post('/api/export-to-drive', adminLimiter, requireAdminKey, async (req, res) => {
-  const oauth2Client = getAuthorizedClient();
+  const oauth2Client = await getAuthorizedClient();
   if (!oauth2Client) {
     return res.status(401).json({
       error: 'Google Drive not connected. Visit /auth/google to connect.',
@@ -308,7 +316,7 @@ app.post('/api/export-to-drive', adminLimiter, requireAdminKey, async (req, res)
     console.error('Drive export failed:', err.message);
     // If token expired and refresh failed
     if (err.message?.includes('invalid_grant') || err.message?.includes('Token has been expired')) {
-      fs.unlinkSync(TOKEN_PATH);
+      await saveToken(null);
       return res.status(401).json({
         error: 'Google token expired. Please reconnect.',
         authUrl: `/auth/google?adminKey=${ADMIN_KEY}`
