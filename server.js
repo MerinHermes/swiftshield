@@ -30,6 +30,7 @@ function getOAuth2Client() {
 
 // Save token to MongoDB (works on Vercel serverless)
 async function saveToken(token) {
+  await ensureDb();
   const db = client.db(DB_NAME);
   await db.collection('config').updateOne(
     { _id: 'google_token' },
@@ -41,6 +42,7 @@ async function saveToken(token) {
 // Load token from MongoDB
 async function loadToken() {
   try {
+    await ensureDb();
     const db  = client.db(DB_NAME);
     const doc = await db.collection('config').findOne({ _id: 'google_token' });
     return doc?.token || null;
@@ -96,28 +98,31 @@ const DB_NAME   = process.env.MONGO_DB  || 'swiftshield';
 const ADMIN_KEY = process.env.ADMIN_API_KEY || 'changeme-in-production';
 
 const client = new MongoClient(MONGO_URI, {
-  serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true }
+  serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
+  serverSelectionTimeoutMS: 8000,
+  connectTimeoutMS: 8000
 });
 
 let logsCol, allowlistCol;
+let dbReady = false;
 
-(async () => {
-  try {
-    await client.connect();
-    const db = client.db(DB_NAME);
-    logsCol      = db.collection('logs');
-    allowlistCol = db.collection('allowlist');
-    await logsCol.createIndex({ timestamp: -1 });
-    await logsCol.createIndex({ user_id: 1 });
-    await logsCol.createIndex({ risk: 1 });
-    await allowlistCol.createIndex({ value: 1 }, { unique: true });
-    await allowlistCol.createIndex({ type: 1 });
-    console.log('✅  MongoDB connected →', DB_NAME);
-  } catch (err) {
-    console.error('❌  MongoDB failed:', err.message);
-    process.exit(1);
-  }
-})();
+async function ensureDb() {
+  if (dbReady) return;
+  await client.connect();
+  const db = client.db(DB_NAME);
+  logsCol      = db.collection('logs');
+  allowlistCol = db.collection('allowlist');
+  await logsCol.createIndex({ timestamp: -1 });
+  await logsCol.createIndex({ user_id: 1 });
+  await logsCol.createIndex({ risk: 1 });
+  await allowlistCol.createIndex({ value: 1 }, { unique: true });
+  await allowlistCol.createIndex({ type: 1 });
+  dbReady = true;
+  console.log('✅  MongoDB connected →', DB_NAME);
+}
+
+// Pre-warm on startup
+ensureDb().catch(err => console.error('⚠  MongoDB pre-warm failed:', err.message));
 
 // ── Email alerts ──────────────────────────────────────────────────────────────
 let mailer = null;
@@ -186,7 +191,7 @@ function validCoord(lat, lon) {
 }
 
 async function insertLog(doc) {
-  if (!logsCol) throw new Error('DB not ready');
+  await ensureDb();
   const r = await logsCol.insertOne({ ...doc, timestamp: new Date() });
   return r.insertedId;
 }
@@ -637,8 +642,6 @@ app.get('/api/admin/verify', adminLimiter, requireAdminKey, (_req, res) => res.j
 
 app.use((err, _req, res, _next) => { console.error(err.message); res.status(500).json({ error:'internal_error' }); });
 
-const shutdown = () => client.close().then(() => { console.log('MongoDB closed'); process.exit(0); });
-process.on('SIGINT',  shutdown);
-process.on('SIGTERM', shutdown);
+// Graceful shutdown (no-op on Vercel serverless)
 
 app.listen(PORT, () => console.log(`SwiftShield v3 → http://localhost:${PORT}`));
