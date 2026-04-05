@@ -648,6 +648,136 @@ app.post('/api/drive/poll', adminLimiter, requireAdminKey, async (_req, res) => 
   }
 });
 
+
+// ── New Device Detection ──────────────────────────────────────────────────────
+async function checkNewDevice(userId, userAgent, ip) {
+  try {
+    const db = client.db(DB_NAME);
+    const fingerprint = userAgent + '|' + (ip || '');
+    const seen = await db.collection('devices').findOne({ user_id: userId, fingerprint });
+    if (!seen) {
+      await db.collection('devices').insertOne({ user_id: userId, fingerprint, userAgent, ip, firstSeen: new Date() });
+      return true;
+    }
+    return false;
+  } catch { return false; }
+}
+
+// ── Bulk Download Detection ───────────────────────────────────────────────────
+async function checkBulkDownload(userId) {
+  try {
+    const since = new Date(Date.now() - 10 * 60 * 1000);
+    const count = await logsCol.countDocuments({ user_id: userId, action: 'download', timestamp: { $gte: since } });
+    return count >= 4;
+  } catch { return false; }
+}
+
+// ── Auto-renew Drive webhook ──────────────────────────────────────────────────
+async function renewDriveWatchIfNeeded() {
+  try {
+    const db = client.db(DB_NAME);
+    const channel = await db.collection('config').findOne({ _id: 'drive_channel' });
+    if (!channel) return;
+    const expiry = parseInt(channel.expiration || '0');
+    if (expiry > Date.now() + 24 * 60 * 60 * 1000) return;
+
+    const oauth2Client = await getAuthorizedClient();
+    if (!oauth2Client) return;
+    const watchDoc = await db.collection('config').findOne({ _id: 'drive_watch' });
+    if (!watchDoc?.pageToken) return;
+
+    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+    const channelId = 'swiftshield-' + Date.now();
+    const webhookUrl = (process.env.ALLOWED_ORIGINS || 'https://swiftshield.in').split(',')[0] + '/api/drive/webhook';
+    const response = await drive.changes.watch({
+      pageToken: watchDoc.pageToken,
+      requestBody: { id: channelId, type: 'web_hook', address: webhookUrl, expiration: String(Date.now() + 7 * 24 * 60 * 60 * 1000) }
+    });
+    await db.collection('config').updateOne(
+      { _id: 'drive_channel' },
+      { $set: { channelId, resourceId: response.data.resourceId, expiration: response.data.expiration, updatedAt: new Date() } }
+    );
+    console.log('Drive webhook auto-renewed');
+  } catch (err) { console.error('Webhook renew failed:', err.message); }
+}
+setInterval(renewDriveWatchIfNeeded, 6 * 60 * 60 * 1000);
+
+// ── GET /api/analytics ────────────────────────────────────────────────────────
+app.get('/api/analytics', adminLimiter, requireAdminKey, async (_req, res) => {
+  try {
+    await ensureDb();
+    const day7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [riskTrend, hourlyDist, topUsers, recentLocations, actionBreakdown] = await Promise.all([
+      logsCol.aggregate([
+        { $match: { timestamp: { $gte: day7 } } },
+        { $group: { _id: { day: { $dateToString: { format: '%Y-%m-%d', date: '$timestamp' } }, risk: '$risk' }, count: { $sum: 1 } } },
+        { $sort: { '_id.day': 1 } }
+      ]).toArray(),
+      logsCol.aggregate([
+        { $group: { _id: { $hour: '$timestamp' }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } }
+      ]).toArray(),
+      logsCol.aggregate([
+        { $group: { _id: '$user_id', count: { $sum: 1 }, highRisk: { $sum: { $cond: [{ $eq: ['$risk','high'] },1,0] } } } },
+        { $sort: { count: -1 } }, { $limit: 5 }
+      ]).toArray(),
+      logsCol.find({ latitude: { $ne: null }, longitude: { $ne: null } })
+        .sort({ timestamp: -1 }).limit(100)
+        .project({ latitude: 1, longitude: 1, user_id: 1, action: 1, risk: 1, timestamp: 1 })
+        .toArray(),
+      logsCol.aggregate([
+        { $group: { _id: '$action', count: { $sum: 1 } } }
+      ]).toArray()
+    ]);
+    res.json({ riskTrend, hourlyDist, topUsers, recentLocations, actionBreakdown });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── POST /api/weekly-report ───────────────────────────────────────────────────
+app.post('/api/weekly-report', adminLimiter, requireAdminKey, async (_req, res) => {
+  try {
+    await ensureDb();
+    const day7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [total, highRisk, external, downloads, uploads, topUsers] = await Promise.all([
+      logsCol.countDocuments({ timestamp: { $gte: day7 } }),
+      logsCol.countDocuments({ timestamp: { $gte: day7 }, risk: 'high' }),
+      logsCol.countDocuments({ timestamp: { $gte: day7 }, outside_office: true }),
+      logsCol.countDocuments({ timestamp: { $gte: day7 }, action: 'download' }),
+      logsCol.countDocuments({ timestamp: { $gte: day7 }, action: 'upload' }),
+      logsCol.aggregate([
+        { $match: { timestamp: { $gte: day7 } } },
+        { $group: { _id: '$user_id', count: { $sum: 1 }, highRisk: { $sum: { $cond: [{ $eq: ['$risk','high'] },1,0] } } } },
+        { $sort: { count: -1 } }, { $limit: 5 }
+      ]).toArray()
+    ]);
+    if (!mailer || !process.env.ALERT_EMAIL_TO) return res.status(400).json({ error: 'Email not configured' });
+    const dashUrl = (process.env.ALLOWED_ORIGINS || 'https://swiftshield.in').split(',')[0];
+    const topUsersHtml = topUsers.map(u =>
+      '<tr><td style="padding:8px;border-bottom:1px solid #30363d">' + u._id + '</td>' +
+      '<td style="padding:8px;border-bottom:1px solid #30363d">' + u.count + ' events</td>' +
+      '<td style="padding:8px;border-bottom:1px solid #30363d;color:#ff4d6d">' + u.highRisk + ' high risk</td></tr>'
+    ).join('');
+    await mailer.sendMail({
+      from: '"SwiftShield Reports" <' + process.env.ALERT_EMAIL_USER + '>',
+      to:   process.env.ALERT_EMAIL_TO,
+      subject: 'SwiftShield Weekly Report — ' + new Date().toDateString(),
+      html: '<div style="font-family:monospace;background:#0d1117;color:#e6edf3;padding:32px;max-width:600px">' +
+        '<h2 style="color:#00dcb4">SwiftShield Weekly Report</h2>' +
+        '<p style="color:#8b949e">' + day7.toDateString() + ' to ' + new Date().toDateString() + '</p>' +
+        '<table style="width:100%;border-collapse:collapse;margin:24px 0">' +
+        '<tr><td style="padding:10px;border-bottom:1px solid #30363d;color:#8b949e">Total Events</td><td style="padding:10px;border-bottom:1px solid #30363d;font-weight:bold">' + total + '</td></tr>' +
+        '<tr><td style="padding:10px;border-bottom:1px solid #30363d;color:#8b949e">High Risk</td><td style="padding:10px;border-bottom:1px solid #30363d;color:#ff4d6d;font-weight:bold">' + highRisk + '</td></tr>' +
+        '<tr><td style="padding:10px;border-bottom:1px solid #30363d;color:#8b949e">External Access</td><td style="padding:10px;border-bottom:1px solid #30363d;color:#ffb347">' + external + '</td></tr>' +
+        '<tr><td style="padding:10px;border-bottom:1px solid #30363d;color:#8b949e">Downloads</td><td style="padding:10px;border-bottom:1px solid #30363d">' + downloads + '</td></tr>' +
+        '<tr><td style="padding:10px;color:#8b949e">Uploads</td><td style="padding:10px">' + uploads + '</td></tr>' +
+        '</table><h3 style="color:#00dcb4">Top Users</h3>' +
+        '<table style="width:100%;border-collapse:collapse">' + topUsersHtml + '</table>' +
+        '<p style="margin-top:24px"><a href="' + dashUrl + '/admin.html" style="color:#00dcb4">View Full Dashboard</a></p></div>'
+    });
+    res.json({ success: true, message: 'Weekly report sent to ' + process.env.ALERT_EMAIL_TO });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── POST /log ─────────────────────────────────────────────────────────────────
 app.post('/log', logLimiter, async (req, res) => {
   const b = req.body || {};
@@ -666,10 +796,12 @@ app.post('/log', logLimiter, async (req, res) => {
 
   const risk = computeRisk(outsideOffice, justification, user_agent);
   try {
-    const doc = { action:'login', user_id:userId, ip, user_agent, device_info:deviceInfo, latitude, longitude, outside_office:outsideOffice, justification, risk };
+    const isNewDevice = await checkNewDevice(userId, user_agent, ip);
+    const doc = { action:'login', user_id:userId, ip, user_agent, device_info:deviceInfo, latitude, longitude, outside_office:outsideOffice, justification, risk, new_device: isNewDevice };
     const id  = await insertLog(doc);
     if (risk === 'high') sendAlert({ ...doc, id });
-    res.json({ logged: true, id: id.toString(), risk });
+    if (isNewDevice) sendAlert({ ...doc, id, action: 'NEW DEVICE DETECTED — login' });
+    res.json({ logged: true, id: id.toString(), risk, newDevice: isNewDevice });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'db_error' });
@@ -697,10 +829,13 @@ app.post('/log/action', logLimiter, async (req, res) => {
 
   const risk = computeRisk(outsideOffice, justification, user_agent);
   try {
-    const doc = { action:b.action, user_id:userId, ip, user_agent, device_info:deviceInfo, file_name:fileName, file_size:fileSize, latitude, longitude, outside_office:outsideOffice, justification, risk };
+    const isBulk = b.action === 'download' ? await checkBulkDownload(userId) : false;
+    const finalRisk = isBulk ? 'high' : risk;
+    const doc = { action:b.action, user_id:userId, ip, user_agent, device_info:deviceInfo, file_name:fileName, file_size:fileSize, latitude, longitude, outside_office:outsideOffice, justification, risk:finalRisk, bulk_download: isBulk };
     const id  = await insertLog(doc);
-    if (risk === 'high') sendAlert({ ...doc, id });
-    res.json({ logged: true, id: id.toString(), risk });
+    if (finalRisk === 'high') sendAlert({ ...doc, id });
+    if (isBulk) sendAlert({ ...doc, id, action: 'BULK DOWNLOAD ALERT — 5+ downloads in 10 min' });
+    res.json({ logged: true, id: id.toString(), risk: finalRisk, bulkAlert: isBulk });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'db_error' });

@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -6,6 +7,9 @@
   <title>SwiftShield — Admin</title>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="/styles.css">
   <style>
     .admin-lock{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
@@ -15,31 +19,23 @@
     .lock-card::after{bottom:8px;right:8px;border-width:0 2px 2px 0;border-radius:0 0 3px 0}
     .lock-icon{font-size:2rem;text-align:center;margin-bottom:8px}
     .lock-title{font-family:var(--sans);font-weight:800;font-size:1.4rem;color:var(--accent);text-align:center;margin-bottom:4px}
-    .lock-sub{font-family:var(--mono);font-size:0.65rem;color:var(--muted);text-align:center;letter-spacing:0.12em;margin-bottom:32px}
-    .lock-error{background:rgba(255,77,109,.12);border:1px solid rgba(255,77,109,.3);border-radius:6px;padding:10px 14px;font-size:0.8rem;color:var(--danger);margin-top:12px;display:none}
+    .lock-sub{font-family:var(--mono);font-size:.65rem;color:var(--muted);text-align:center;letter-spacing:.12em;margin-bottom:32px}
+    .lock-error{background:rgba(255,77,109,.12);border:1px solid rgba(255,77,109,.3);border-radius:6px;padding:10px 14px;font-size:.8rem;color:var(--danger);margin-top:12px;display:none}
     .lock-error.visible{display:block}
-    .field-label{display:block;font-family:var(--mono);font-size:0.68rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:6px}
-
-    .tab-bar{display:flex;gap:4px;padding:6px;background:rgba(0,0,0,.3);border-radius:10px;border:1px solid var(--border);margin-bottom:24px}
-    .tab-btn{flex:1;padding:9px 16px;background:transparent;border:none;border-radius:7px;color:var(--muted);font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;cursor:pointer;transition:all .18s;white-space:nowrap}
+    .field-label{display:block;font-family:var(--mono);font-size:.68rem;color:var(--muted);letter-spacing:.08em;margin-bottom:6px}
+    .tab-bar{display:flex;gap:4px;padding:6px;background:rgba(0,0,0,.3);border-radius:10px;border:1px solid var(--border);margin-bottom:24px;flex-wrap:wrap}
+    .tab-btn{flex:1;padding:9px 16px;background:transparent;border:none;border-radius:7px;color:var(--muted);font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;cursor:pointer;transition:all .18s;white-space:nowrap;min-width:100px}
     .tab-btn:hover{color:var(--text);background:rgba(0,220,180,.06)}
     .tab-btn.active{background:rgba(0,220,180,.12);color:var(--accent);border:1px solid rgba(0,220,180,.25)}
-    .tab-pane{display:none}
-    .tab-pane.active{display:block}
-
+    .tab-pane{display:none}.tab-pane.active{display:block}
     .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
     @media(max-width:640px){.stats-row{grid-template-columns:repeat(2,1fr)}}
-    .stat{padding:18px 20px}
-    .stat-label{font-family:var(--mono);font-size:.6rem;color:var(--muted);letter-spacing:.1em;margin-bottom:6px}
+    .stat{padding:18px 20px}.stat-label{font-family:var(--mono);font-size:.6rem;color:var(--muted);letter-spacing:.1em;margin-bottom:6px}
     .stat-value{font-family:var(--mono);font-size:1.6rem;font-weight:700;color:var(--text)}
-    .stat-value.danger{color:var(--danger)}
-    .stat-value.warn{color:var(--warn)}
-    .stat-value.accent{color:var(--accent)}
-
+    .stat-value.danger{color:var(--danger)}.stat-value.warn{color:var(--warn)}.stat-value.accent{color:var(--accent)}
     .filter-card{padding:16px 20px;margin-bottom:16px}
     .filter-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     .filter-row .input{flex:1;min-width:140px}
-
     .logs-card{padding:0;overflow:hidden}
     .table-wrap{overflow-x:auto}
     .logs-table,.allowlist-table{width:100%;border-collapse:collapse;font-size:.78rem}
@@ -47,37 +43,28 @@
     .logs-table tbody tr,.allowlist-table tbody tr{border-bottom:1px solid rgba(0,220,180,.06);transition:background .12s}
     .logs-table tbody tr:hover,.allowlist-table tbody tr:hover{background:rgba(0,220,180,.04)}
     .logs-table tbody td,.allowlist-table tbody td{padding:10px 14px;vertical-align:middle;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .logs-table td pre.mono{font-family:var(--mono);font-size:.68rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:pre}
-
     .badge{display:inline-block;padding:3px 8px;border-radius:4px;font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;font-weight:700}
     .badge.high{background:rgba(255,77,109,.18);color:var(--danger);border:1px solid rgba(255,77,109,.3)}
     .badge.medium{background:rgba(255,179,71,.15);color:var(--warn);border:1px solid rgba(255,179,71,.3)}
     .badge.low{background:rgba(0,220,180,.12);color:var(--accent);border:1px solid rgba(0,220,180,.2)}
     .badge.action{background:rgba(0,153,255,.12);color:#4db8ff;border:1px solid rgba(0,153,255,.25)}
+    .badge.new-device{background:rgba(180,100,255,.18);color:#c084fc;border:1px solid rgba(180,100,255,.3)}
     .type-badge{display:inline-block;padding:3px 8px;border-radius:4px;font-family:var(--mono);font-size:.62rem;letter-spacing:.06em}
     .type-badge.username{background:rgba(0,153,255,.12);color:#4db8ff;border:1px solid rgba(0,153,255,.25)}
     .type-badge.email{background:rgba(0,220,180,.12);color:var(--accent);border:1px solid rgba(0,220,180,.25)}
     .type-badge.ip{background:rgba(255,179,71,.12);color:var(--warn);border:1px solid rgba(255,179,71,.25)}
-
     .btn-icon{background:transparent;border:1px solid rgba(255,77,109,.3);color:var(--danger);border-radius:5px;padding:4px 9px;font-size:.7rem;cursor:pointer;transition:all .15s}
     .btn-icon:hover{background:rgba(255,77,109,.15)}
-
     .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:64px 24px;color:var(--muted)}
     .empty-icon{font-size:2rem;margin-bottom:12px;opacity:.4}
-    .empty h4{font-weight:600;margin-bottom:8px}
-    .empty p{font-size:.82rem}
-
+    .empty h4{font-weight:600;margin-bottom:8px}.empty p{font-size:.82rem}
     .pagination{display:flex;gap:8px;align-items:center;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--border);font-family:var(--mono);font-size:.7rem;color:var(--muted)}
     .pagination button{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 12px;font-family:var(--mono);font-size:.68rem;cursor:pointer;transition:all .15s}
     .pagination button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
     .pagination button:disabled{opacity:.35;cursor:default}
-
     .add-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;padding:20px;border-bottom:1px solid var(--border)}
     .add-row .fg{display:flex;flex-direction:column;gap:5px;flex:1;min-width:140px}
     .add-row .fg label{font-family:var(--mono);font-size:.6rem;color:var(--muted);letter-spacing:.08em}
-    .note-input{background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:.72rem;padding:2px 4px;width:100%;outline:none;transition:border-color .15s}
-    .note-input:focus{border-color:var(--accent);color:var(--text)}
-
     .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
     @media(max-width:640px){.settings-grid{grid-template-columns:1fr}}
     .settings-card{padding:24px}
@@ -85,38 +72,30 @@
     .settings-card p{font-size:.75rem;color:var(--muted);margin-bottom:18px}
     .setting-field{margin-bottom:14px}
     .setting-field label{display:block;font-family:var(--mono);font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-bottom:6px}
-    .danger-zone{border-color:rgba(255,77,109,.25)!important}
-    .danger-zone h3{color:var(--danger)!important}
+    .danger-zone{border-color:rgba(255,77,109,.25)!important}.danger-zone h3{color:var(--danger)!important}
     .btn-danger{background:rgba(255,77,109,.12);border:1px solid rgba(255,77,109,.3);color:var(--danger);padding:10px 18px;border-radius:7px;font-family:var(--mono);font-size:.72rem;cursor:pointer;transition:all .15s;width:100%;margin-bottom:8px}
     .btn-danger:hover{background:rgba(255,77,109,.22)}
-
     .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 28px;margin-bottom:24px;border-radius:0 0 var(--radius) var(--radius)}
     .brand{display:flex;align-items:center;gap:14px}
-    .logo-small {width:36px;height:36px;border-radius:8px;object-fit:cover;}
+    .logo-small{width:36px;height:36px;border-radius:8px;object-fit:cover}
     .app-title{font-weight:800;font-size:1rem;color:var(--text)}
     .muted-sm{font-family:var(--mono);font-size:.6rem;color:var(--muted);letter-spacing:.1em}
     .nav-actions{display:flex;gap:10px;align-items:center}
     .session-info{font-family:var(--mono);font-size:.65rem;color:var(--muted)}
     .session-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:6px;animation:pulse 2s infinite}
+    .live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#ff4d6d;margin-right:6px;animation:pulse 1s infinite}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-
     .modal{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px}
-    .modal.hidden{display:none}
-    .modal-panel{padding:32px;max-width:440px;width:100%}
+    .modal.hidden{display:none}.modal-panel{padding:32px;max-width:440px;width:100%}
     .modal-title{font-weight:800;font-size:1.1rem;margin-bottom:8px}
     .modal-sub{font-size:.82rem;color:var(--muted);margin-bottom:20px}
     .modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
-
     .toasts{position:fixed;bottom:24px;right:24px;z-index:300;display:flex;flex-direction:column;gap:8px}
     .toast{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px 18px;font-size:.8rem;backdrop-filter:blur(12px);transition:opacity .4s;max-width:320px}
-    .toast.danger{border-color:rgba(255,77,109,.4);color:var(--danger)}
-    .toast.warn{border-color:rgba(255,179,71,.4);color:var(--warn)}
-
+    .toast.danger{border-color:rgba(255,77,109,.4);color:var(--danger)}.toast.warn{border-color:rgba(255,179,71,.4);color:var(--warn)}
     .btn{display:inline-flex;align-items:center;justify-content:center;padding:11px 20px;border-radius:8px;font-family:var(--mono);font-size:.75rem;letter-spacing:.06em;cursor:pointer;border:1px solid transparent;transition:all .18s;text-decoration:none}
-    .btn.primary{background:var(--accent);color:#050810;font-weight:700}
-    .btn.primary:hover{filter:brightness(1.1)}
-    .btn.ghost{background:transparent;border-color:var(--border);color:var(--text)}
-    .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+    .btn.primary{background:var(--accent);color:#050810;font-weight:700}.btn.primary:hover{filter:brightness(1.1)}
+    .btn.ghost{background:transparent;border-color:var(--border);color:var(--text)}.btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
     .btn.sm{padding:7px 14px;font-size:.68rem}
     .input{width:100%;padding:11px 14px;background:rgba(0,0,0,.35);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:var(--sans);font-size:.85rem;outline:none;transition:border-color .15s}
     .input:focus{border-color:var(--accent)}
@@ -125,6 +104,22 @@
     .table-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border)}
     .table-header-title{font-family:var(--mono);font-size:.65rem;color:var(--muted);letter-spacing:.1em}
     .table-header-actions{display:flex;gap:8px}
+    /* Map */
+    #accessMap{height:420px;border-radius:10px;border:1px solid var(--border)}
+    .leaflet-container{background:#0d1117!important}
+    /* Charts */
+    .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+    @media(max-width:768px){.charts-grid{grid-template-columns:1fr}}
+    .chart-card{padding:20px}
+    .chart-card h4{font-family:var(--mono);font-size:.65rem;color:var(--muted);letter-spacing:.1em;margin-bottom:16px}
+    canvas{max-height:220px}
+    /* Analytics top users */
+    .top-users-list{display:flex;flex-direction:column;gap:8px}
+    .top-user-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:7px;background:rgba(0,0,0,.2);border:1px solid var(--border)}
+    .top-user-name{flex:1;font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .top-user-bar{height:4px;border-radius:2px;background:var(--accent);transition:width .5s}
+    .top-user-count{font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+    .live-indicator{font-family:var(--mono);font-size:.6rem;color:#ff4d6d;letter-spacing:.1em}
   </style>
 </head>
 <body>
@@ -147,10 +142,9 @@
 
 <!-- ADMIN DASHBOARD -->
 <div id="adminDash" class="hidden">
-
   <header class="topbar glass">
     <div class="brand">
-      <img src="/logo.jpeg" class="logo-small" />
+      <img src="/logo.jpeg" class="logo-small"/>
       <div>
         <div class="app-title">SwiftShield Admin</div>
         <div class="muted-sm">ACCESS MONITORING DASHBOARD</div>
@@ -158,39 +152,29 @@
     </div>
     <nav class="nav-actions">
       <div class="session-info"><span class="session-dot"></span>SESSION ACTIVE</div>
+      <div class="live-indicator"><span class="live-dot"></span>LIVE</div>
       <a href="/" class="btn ghost sm">User View</a>
       <button id="logoutBtn" class="btn ghost sm">Logout</button>
     </nav>
   </header>
 
   <main class="page">
-
     <section class="stats-row">
-      <div class="stat glass">
-        <div class="stat-label">TOTAL LOGS</div>
-        <div id="statTotal" class="stat-value">—</div>
-      </div>
-      <div class="stat glass">
-        <div class="stat-label">HIGH RISK</div>
-        <div id="statHigh" class="stat-value danger">—</div>
-      </div>
-      <div class="stat glass">
-        <div class="stat-label">EXTERNAL ACCESS</div>
-        <div id="statExternal" class="stat-value warn">—</div>
-      </div>
-      <div class="stat glass">
-        <div class="stat-label">ALLOWLIST ENTRIES</div>
-        <div id="statAllowlist" class="stat-value accent">—</div>
-      </div>
+      <div class="stat glass"><div class="stat-label">TOTAL LOGS</div><div id="statTotal" class="stat-value">—</div></div>
+      <div class="stat glass"><div class="stat-label">HIGH RISK</div><div id="statHigh" class="stat-value danger">—</div></div>
+      <div class="stat glass"><div class="stat-label">EXTERNAL ACCESS</div><div id="statExternal" class="stat-value warn">—</div></div>
+      <div class="stat glass"><div class="stat-label">ALLOWLIST ENTRIES</div><div id="statAllowlist" class="stat-value accent">—</div></div>
     </section>
 
     <div class="tab-bar">
       <button class="tab-btn active" data-tab="logs">⬡ ACCESS LOGS</button>
+      <button class="tab-btn" data-tab="map">⬡ LIVE MAP</button>
+      <button class="tab-btn" data-tab="analytics">⬡ ANALYTICS</button>
       <button class="tab-btn" data-tab="allowlist">⬡ ALLOWLIST</button>
       <button class="tab-btn" data-tab="settings">⬡ SETTINGS</button>
     </div>
 
-    <!-- ── LOGS TAB ─────────────────────────────────────────── -->
+    <!-- ── LOGS TAB ── -->
     <div id="tab-logs" class="tab-pane active">
       <section class="filter-card glass">
         <div class="filter-row">
@@ -206,6 +190,7 @@
             <option value="login">Login</option>
             <option value="upload">Upload</option>
             <option value="download">Download</option>
+            <option value="view">View</option>
           </select>
           <button id="clearFilters" class="btn ghost sm">Clear</button>
           <button id="refreshLogs" class="btn ghost sm">↻ Refresh</button>
@@ -216,21 +201,16 @@
           <span class="table-header-title" id="logsCountLabel">— RECORDS</span>
           <div class="table-header-actions">
             <button id="exportCsvBtn" class="btn ghost sm">⬇ Export CSV</button>
+            <button id="exportDriveBtn" class="btn ghost sm">⬆ Export to Drive</button>
           </div>
         </div>
         <div id="logsEmpty" class="empty">
-          <div class="empty-icon">⬡</div>
-          <h4>No logs found</h4>
-          <p>Adjust filters or wait for access events.</p>
+          <div class="empty-icon">⬡</div><h4>No logs found</h4><p>Adjust filters or wait for access events.</p>
         </div>
         <div class="table-wrap" id="tableWrap" style="display:none">
           <table class="logs-table">
             <thead>
-              <tr>
-                <th>ID</th><th>USER</th><th>ACTION</th><th>IP</th>
-                <th>DEVICE</th><th>LOCATION</th><th>RISK</th>
-                <th>JUSTIFICATION</th><th>TIME</th><th></th>
-              </tr>
+              <tr><th>ID</th><th>USER</th><th>ACTION</th><th>IP</th><th>DEVICE</th><th>LOCATION</th><th>RISK</th><th>JUSTIFICATION</th><th>TIME</th><th></th></tr>
             </thead>
             <tbody id="logsBody"></tbody>
           </table>
@@ -243,100 +223,122 @@
       </section>
     </div>
 
-    <!-- ── ALLOWLIST TAB ────────────────────────────────────── -->
+    <!-- ── MAP TAB ── -->
+    <div id="tab-map" class="tab-pane">
+      <section class="glass" style="padding:20px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div>
+            <div style="font-family:var(--mono);font-size:.65rem;color:var(--muted);letter-spacing:.1em">LIVE ACCESS MAP</div>
+            <div style="font-size:.8rem;color:var(--text);margin-top:4px">Last 100 access events with location data</div>
+          </div>
+          <button id="refreshMap" class="btn ghost sm">↻ Refresh</button>
+        </div>
+        <div id="accessMap"></div>
+        <div style="display:flex;gap:16px;margin-top:12px;font-family:var(--mono);font-size:.65rem;flex-wrap:wrap">
+          <span>🔴 High Risk</span><span>🟡 Medium Risk</span><span>🟢 Low Risk</span><span>⬡ Office Location</span>
+        </div>
+      </section>
+    </div>
+
+    <!-- ── ANALYTICS TAB ── -->
+    <div id="tab-analytics" class="tab-pane">
+      <div class="charts-grid">
+        <div class="chart-card glass"><h4>RISK TREND — LAST 7 DAYS</h4><canvas id="riskChart"></canvas></div>
+        <div class="chart-card glass"><h4>PEAK ACCESS HOURS</h4><canvas id="hoursChart"></canvas></div>
+        <div class="chart-card glass"><h4>ACTION BREAKDOWN</h4><canvas id="actionChart"></canvas></div>
+        <div class="chart-card glass">
+          <h4>TOP USERS BY ACTIVITY</h4>
+          <div id="topUsersList" class="top-users-list"></div>
+        </div>
+      </div>
+      <section class="glass" style="padding:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="font-family:var(--mono);font-size:.65rem;color:var(--muted);letter-spacing:.1em">WEEKLY EMAIL REPORT</div>
+          <button id="sendReportBtn" class="btn ghost sm">📧 Send Report Now</button>
+        </div>
+        <p style="font-size:.8rem;color:var(--muted)">Sends a weekly summary to your admin email. Reports are also scheduled every Monday at 8AM automatically.</p>
+      </section>
+    </div>
+
+    <!-- ── ALLOWLIST TAB ── -->
     <div id="tab-allowlist" class="tab-pane">
       <section class="logs-card glass" style="margin-bottom:20px">
         <div class="add-row">
-          <div class="fg">
-            <label>TYPE</label>
-            <select id="newType" class="input">
-              <option value="username">Username</option>
-              <option value="email">Email</option>
-              <option value="ip">IP Address</option>
-            </select>
+          <div class="fg"><label>TYPE</label>
+            <select id="newType" class="input"><option value="username">Username</option><option value="email">Email</option><option value="ip">IP Address</option></select>
           </div>
-          <div class="fg" style="flex:2">
-            <label>VALUE</label>
-            <input id="newValue" class="input" placeholder="username, user@email.com, or IP…"/>
-          </div>
-          <div class="fg" style="flex:2">
-            <label>NOTE (optional)</label>
-            <input id="newNote" class="input" placeholder="Reason for allowlisting…"/>
-          </div>
+          <div class="fg" style="flex:2"><label>VALUE</label><input id="newValue" class="input" placeholder="username, user@email.com, or IP…"/></div>
+          <div class="fg" style="flex:2"><label>NOTE (optional)</label><input id="newNote" class="input" placeholder="Reason for allowlisting…"/></div>
           <button id="addAllowBtn" class="btn primary sm" style="align-self:flex-end;white-space:nowrap">+ Add Entry</button>
         </div>
         <div style="padding:0 20px 14px">
           <div class="filter-row" style="gap:10px">
             <select id="filterAllowType" class="input" style="max-width:180px;flex:0 0 180px">
-              <option value="">All Types</option>
-              <option value="username">Username</option>
-              <option value="email">Email</option>
-              <option value="ip">IP Address</option>
+              <option value="">All Types</option><option value="username">Username</option><option value="email">Email</option><option value="ip">IP Address</option>
             </select>
             <input id="filterAllowSearch" class="input" placeholder="Search value or note…" style="max-width:300px"/>
             <span id="allowlistCount" style="font-family:var(--mono);font-size:.65rem;color:var(--muted);margin-left:auto">— entries</span>
           </div>
         </div>
-        <div id="allowlistEmpty" class="empty" style="padding:40px">
-          <div class="empty-icon">⬡</div>
-          <h4>No entries yet</h4>
-          <p>Add usernames, emails, or IPs above to bypass the risk flag.</p>
-        </div>
+        <div id="allowlistEmpty" class="empty" style="padding:40px"><div class="empty-icon">⬡</div><h4>No entries yet</h4><p>Add usernames, emails, or IPs above.</p></div>
         <div class="table-wrap" id="allowlistTableWrap" style="display:none">
           <table class="allowlist-table">
-            <thead>
-              <tr><th>TYPE</th><th>VALUE</th><th>NOTE</th><th>ADDED</th><th>ADDED BY</th><th></th></tr>
-            </thead>
+            <thead><tr><th>TYPE</th><th>VALUE</th><th>NOTE</th><th>ADDED</th><th>ADDED BY</th><th></th></tr></thead>
             <tbody id="allowlistBody"></tbody>
           </table>
         </div>
       </section>
     </div>
 
-    <!-- ── SETTINGS TAB ─────────────────────────────────────── -->
+    <!-- ── SETTINGS TAB ── -->
     <div id="tab-settings" class="tab-pane">
       <div class="settings-grid">
-
         <div class="settings-card glass">
-          <h3>OFFICE GEOFENCE</h3>
-          <p>Location used to determine whether access is internal or external.</p>
+          <h3>OFFICE GEOFENCE</h3><p>Location used to determine internal vs external access.</p>
           <div class="setting-field"><label>LATITUDE</label><input id="cfgLat" class="input" readonly/></div>
           <div class="setting-field"><label>LONGITUDE</label><input id="cfgLon" class="input" readonly/></div>
           <div class="setting-field"><label>RADIUS (metres)</label><input id="cfgRadius" class="input" readonly/></div>
-          <p style="font-size:.7rem;color:var(--muted)">Change via OFFICE_LAT / OFFICE_LON / OFFICE_RADIUS in .env, then restart.</p>
+          <p style="font-size:.7rem;color:var(--muted)">Change via OFFICE_LAT / OFFICE_LON / OFFICE_RADIUS in Vercel env vars.</p>
         </div>
-
         <div class="settings-card glass">
-          <h3>RISK SCORING</h3>
-          <p>How risk is automatically computed for each access event.</p>
+          <h3>RISK SCORING</h3><p>How risk is computed for each access event.</p>
           <table style="width:100%;font-size:.75rem;border-collapse:collapse">
-            <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 4px;color:var(--muted)">Inside office perimeter</td><td style="padding:8px 4px"><span class="badge low">LOW</span></td></tr>
+            <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 4px;color:var(--muted)">Inside office</td><td style="padding:8px 4px"><span class="badge low">LOW</span></td></tr>
             <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 4px;color:var(--muted)">Outside + good justification</td><td style="padding:8px 4px"><span class="badge low">LOW</span></td></tr>
-            <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 4px;color:var(--muted)">Outside + short justification (&lt;20 chars)</td><td style="padding:8px 4px"><span class="badge medium">MEDIUM</span></td></tr>
+            <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 4px;color:var(--muted)">Outside + short justification</td><td style="padding:8px 4px"><span class="badge medium">MEDIUM</span></td></tr>
             <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 4px;color:var(--muted)">Outside + no justification</td><td style="padding:8px 4px"><span class="badge high">HIGH</span></td></tr>
-            <tr><td style="padding:8px 4px;color:var(--muted)">Automated / bot user agent</td><td style="padding:8px 4px"><span class="badge high">HIGH</span></td></tr>
+            <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 4px;color:var(--muted)">New device detected</td><td style="padding:8px 4px"><span class="badge new-device">ALERT</span></td></tr>
+            <tr><td style="padding:8px 4px;color:var(--muted)">Bulk download (5+ in 10min)</td><td style="padding:8px 4px"><span class="badge high">HIGH</span></td></tr>
           </table>
         </div>
-
         <div class="settings-card glass">
-          <h3>SESSION</h3>
-          <p>Current admin session information.</p>
+          <h3>GOOGLE DRIVE</h3><p>Drive integration status and controls.</p>
+          <div id="driveStatus" style="font-family:var(--mono);font-size:.75rem;color:var(--muted);margin-bottom:12px">Checking...</div>
+          <button id="renewWatchBtn" class="btn ghost" style="width:100%;margin-bottom:8px">↻ Renew Drive Webhook</button>
+          <button id="pollNowBtn" class="btn ghost" style="width:100%">⬇ Poll Drive Reports Now</button>
+        </div>
+        <div class="settings-card glass">
+          <h3>SESSION</h3><p>Current admin session information.</p>
           <div class="setting-field"><label>AUTHENTICATED AS</label><input class="input" value="Admin" readonly/></div>
           <div class="setting-field"><label>SESSION STARTED</label><input id="sessionStart" class="input" readonly/></div>
+          <div class="setting-field"><label>AUTO-REFRESH</label>
+            <select id="autoRefreshSelect" class="input">
+              <option value="0">Off</option>
+              <option value="15">Every 15 seconds</option>
+              <option value="30" selected>Every 30 seconds</option>
+              <option value="60">Every 60 seconds</option>
+            </select>
+          </div>
           <button id="logoutBtn2" class="btn ghost" style="width:100%;margin-top:4px">Logout</button>
         </div>
-
         <div class="settings-card glass danger-zone">
-          <h3>DANGER ZONE</h3>
-          <p>Irreversible bulk operations — confirm carefully.</p>
+          <h3>DANGER ZONE</h3><p>Irreversible bulk operations — confirm carefully.</p>
           <button class="btn-danger" id="clearHighRisk">🗑 Clear All HIGH RISK Logs</button>
           <button class="btn-danger" id="clearAllLogs">🗑 Clear ALL Access Logs</button>
           <p style="font-size:.7rem;color:rgba(255,77,109,.6);margin-top:8px">These operations cannot be undone.</p>
         </div>
-
       </div>
     </div>
-
   </main>
 </div>
 
@@ -344,15 +346,364 @@
 <div id="confirmModal" class="modal hidden" role="dialog" aria-modal="true">
   <div class="modal-panel glass">
     <div class="modal-title" id="confirmTitle">Confirm Action</div>
-    <div class="modal-sub"   id="confirmMsg">Are you sure?</div>
+    <div class="modal-sub" id="confirmMsg">Are you sure?</div>
     <div class="modal-actions">
       <button id="confirmCancel" class="btn ghost">Cancel</button>
-      <button id="confirmOk"     class="btn primary">Confirm</button>
+      <button id="confirmOk" class="btn primary">Confirm</button>
     </div>
   </div>
 </div>
 
 <div id="toasts" class="toasts" aria-live="polite"></div>
-<script src="/admin.js"></script>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let adminKey = '', page = 0, total = 0, filterUser = '', filterRisk = '', filterAction = '';
+const PAGE_SIZE = 20;
+let autoRefreshTimer = null;
+let map = null, riskChart = null, hoursChart = null, actionChart = null;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function toast(msg, type='') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  $('toasts').appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 3500);
+}
+
+function confirm(title, msg, cb) {
+  $('confirmTitle').textContent = title;
+  $('confirmMsg').textContent = msg;
+  $('confirmModal').classList.remove('hidden');
+  $('confirmOk').onclick = () => { $('confirmModal').classList.add('hidden'); cb(); };
+  $('confirmCancel').onclick = () => $('confirmModal').classList.add('hidden');
+}
+
+async function api(path, opts={}) {
+  const r = await fetch(path, { headers: { 'x-admin-key': adminKey, 'Content-Type': 'application/json', ...(opts.headers||{}) }, ...opts });
+  return r.json();
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+async function unlock() {
+  const key = $('lockKey').value.trim();
+  if (!key) return;
+  const res = await fetch('/api/admin/verify', { headers: { 'x-admin-key': key } });
+  if (res.ok) {
+    adminKey = key;
+    $('lockScreen').classList.add('hidden');
+    $('adminDash').classList.remove('hidden');
+    $('sessionStart').value = new Date().toLocaleString();
+    loadAll();
+    startAutoRefresh();
+    fetch('/config').then(r=>r.json()).then(d => {
+      if (d.office) { $('cfgLat').value = d.office.latitude; $('cfgLon').value = d.office.longitude; $('cfgRadius').value = d.office.radius; }
+    });
+  } else {
+    $('lockError').classList.add('visible');
+  }
+}
+
+$('unlockBtn').onclick = unlock;
+$('lockKey').onkeydown = e => e.key === 'Enter' && unlock();
+[$('logoutBtn'),$('logoutBtn2')].forEach(b => b.onclick = () => location.reload());
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    $('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'map') initMap();
+    if (btn.dataset.tab === 'analytics') loadAnalytics();
+  };
+});
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+async function loadStats() {
+  const [stats, allow] = await Promise.all([api('/api/stats'), api('/api/allowlist')]);
+  $('statTotal').textContent = stats.total ?? '—';
+  $('statHigh').textContent = stats.highRisk ?? '—';
+  $('statExternal').textContent = stats.externalAccess ?? '—';
+  $('statAllowlist').textContent = allow.total ?? '—';
+}
+
+// ── Logs ──────────────────────────────────────────────────────────────────────
+async function loadLogs() {
+  const params = new URLSearchParams({ limit: PAGE_SIZE, skip: page * PAGE_SIZE });
+  if (filterUser)   params.set('user_id', filterUser);
+  if (filterRisk)   params.set('risk', filterRisk);
+  if (filterAction) params.set('action', filterAction);
+  const data = await api('/api/logs?' + params);
+  total = data.total || 0;
+  $('logsCountLabel').textContent = total + ' RECORDS';
+  const tbody = $('logsBody');
+  tbody.innerHTML = '';
+  if (!data.rows?.length) {
+    $('logsEmpty').style.display = '';
+    $('tableWrap').style.display = 'none';
+    $('logsPagination').style.display = 'none';
+    return;
+  }
+  $('logsEmpty').style.display = 'none';
+  $('tableWrap').style.display = '';
+  $('logsPagination').style.display = 'flex';
+  data.rows.forEach(r => {
+    const tr = document.createElement('tr');
+    const loc = r.latitude ? r.latitude.toFixed(4) + ', ' + r.longitude.toFixed(4) : '—';
+    const newDeviceBadge = r.new_device ? '<span class="badge new-device" style="margin-left:4px">NEW DEVICE</span>' : '';
+    const bulkBadge = r.bulk_download ? '<span class="badge high" style="margin-left:4px">BULK</span>' : '';
+    tr.innerHTML =
+      '<td><code style="font-size:.65rem;color:var(--muted)">' + esc(r.id.slice(-8)) + '</code></td>' +
+      '<td>' + esc(r.user_id||'—') + newDeviceBadge + '</td>' +
+      '<td><span class="badge action">' + esc(r.action||'—') + '</span>' + bulkBadge + '</td>' +
+      '<td>' + esc(r.ip||'—') + '</td>' +
+      '<td style="max-width:160px"><span title="' + esc(r.user_agent||'') + '">' + esc((r.device_info||r.user_agent||'—').slice(0,30)) + '</span></td>' +
+      '<td>' + loc + '</td>' +
+      '<td><span class="badge ' + (r.risk||'low') + '">' + (r.risk||'—').toUpperCase() + '</span></td>' +
+      '<td>' + esc((r.justification||'—').slice(0,40)) + '</td>' +
+      '<td style="white-space:nowrap;font-size:.68rem;color:var(--muted)">' + (r.timestamp ? new Date(r.timestamp).toLocaleString() : '—') + '</td>' +
+      '<td><button class="btn-icon" data-id="' + r.id + '">✕</button></td>';
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('.btn-icon').forEach(btn => {
+    btn.onclick = () => confirm('Delete Log', 'Remove this log entry?', async () => {
+      await api('/api/logs/' + btn.dataset.id, { method: 'DELETE' });
+      toast('Log deleted'); loadLogs(); loadStats();
+    });
+  });
+  $('pageInfo').textContent = 'Page ' + (page+1) + ' of ' + Math.max(1, Math.ceil(total/PAGE_SIZE));
+  $('prevPage').disabled = page === 0;
+  $('nextPage').disabled = (page+1)*PAGE_SIZE >= total;
+}
+
+$('prevPage').onclick = () => { page--; loadLogs(); };
+$('nextPage').onclick = () => { page++; loadLogs(); };
+$('refreshLogs').onclick = () => { page = 0; loadLogs(); loadStats(); };
+$('clearFilters').onclick = () => {
+  $('filterUser').value = ''; $('filterRisk').value = ''; $('filterAction').value = '';
+  filterUser = ''; filterRisk = ''; filterAction = ''; page = 0; loadLogs();
+};
+let filterTimer;
+$('filterUser').oninput = () => { clearTimeout(filterTimer); filterTimer = setTimeout(() => { filterUser = $('filterUser').value.trim(); page = 0; loadLogs(); }, 400); };
+$('filterRisk').onchange = () => { filterRisk = $('filterRisk').value; page = 0; loadLogs(); };
+$('filterAction').onchange = () => { filterAction = $('filterAction').value; page = 0; loadLogs(); };
+
+// ── Export ────────────────────────────────────────────────────────────────────
+$('exportCsvBtn').onclick = async () => {
+  const data = await api('/api/logs?limit=1000');
+  if (!data.rows?.length) return toast('No logs to export','warn');
+  const headers = ['id','timestamp','action','user_id','risk','outside_office','file_name','ip','latitude','longitude','justification'];
+  const csv = [headers.join(','), ...data.rows.map(r => headers.map(h => '"' + String(r[h]??'').replace(/"/g,'""') + '"').join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'swiftshield-logs-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  toast('CSV downloaded');
+};
+
+$('exportDriveBtn').onclick = async () => {
+  toast('Exporting to Google Drive…');
+  const res = await api('/api/export-to-drive', { method: 'POST' });
+  if (res.success) toast('Exported ' + res.rows + ' rows → ' + res.fileName);
+  else toast('Drive export failed: ' + (res.error||'unknown'), 'danger');
+};
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+async function initMap() {
+  if (!map) {
+    map = L.map('accessMap', { zoomControl: true }).setView([20.5937, 78.9629], 5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap © CARTO', maxZoom: 18
+    }).addTo(map);
+  }
+  await loadMapData();
+}
+
+async function loadMapData() {
+  if (!map) return;
+  map.eachLayer(l => { if (l instanceof L.CircleMarker || l instanceof L.Marker) map.removeLayer(l); });
+
+  const data = await api('/api/analytics');
+  const cfg = await fetch('/config').then(r=>r.json());
+
+  // Office marker
+  if (cfg.office) {
+    L.circleMarker([cfg.office.latitude, cfg.office.longitude], {
+      radius: 14, color: '#00dcb4', fillColor: '#00dcb4', fillOpacity: 0.15, weight: 2
+    }).addTo(map).bindPopup('<b>Office Perimeter</b><br>Radius: ' + cfg.office.radius + 'm');
+  }
+
+  // Access points
+  const colorMap = { high: '#ff4d6d', medium: '#ffb347', low: '#00dcb4' };
+  (data.recentLocations || []).forEach(loc => {
+    const color = colorMap[loc.risk] || '#888';
+    L.circleMarker([loc.latitude, loc.longitude], {
+      radius: 7, color, fillColor: color, fillOpacity: 0.7, weight: 1.5
+    }).addTo(map).bindPopup(
+      '<b>' + esc(loc.user_id||'unknown') + '</b><br>' +
+      'Action: ' + (loc.action||'—') + '<br>' +
+      'Risk: <b style="color:' + color + '">' + (loc.risk||'—').toUpperCase() + '</b><br>' +
+      new Date(loc.timestamp).toLocaleString()
+    );
+  });
+
+  toast('Map updated with ' + (data.recentLocations?.length||0) + ' locations');
+}
+
+$('refreshMap').onclick = loadMapData;
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+async function loadAnalytics() {
+  const data = await api('/api/analytics');
+
+  // Risk trend chart
+  const days = [...new Set((data.riskTrend||[]).map(d => d._id.day))].sort();
+  const riskTypes = ['high','medium','low'];
+  const riskColors = { high: '#ff4d6d', medium: '#ffb347', low: '#00dcb4' };
+  const datasets = riskTypes.map(risk => ({
+    label: risk.toUpperCase(),
+    data: days.map(day => { const found = data.riskTrend.find(d => d._id.day===day && d._id.risk===risk); return found ? found.count : 0; }),
+    borderColor: riskColors[risk], backgroundColor: riskColors[risk] + '33', tension: 0.4, fill: true
+  }));
+  if (riskChart) riskChart.destroy();
+  riskChart = new Chart($('riskChart'), {
+    type: 'line',
+    data: { labels: days.map(d => d.slice(5)), datasets },
+    options: { responsive:true, plugins:{ legend:{ labels:{ color:'#8b949e', font:{size:10} } } }, scales:{ x:{ ticks:{color:'#8b949e'}, grid:{color:'rgba(255,255,255,.05)'} }, y:{ ticks:{color:'#8b949e'}, grid:{color:'rgba(255,255,255,.05)'} } } }
+  });
+
+  // Hourly chart
+  const hours = Array.from({length:24},(_,i)=>i);
+  const hourCounts = hours.map(h => { const found = (data.hourlyDist||[]).find(d=>d._id===h); return found?found.count:0; });
+  if (hoursChart) hoursChart.destroy();
+  hoursChart = new Chart($('hoursChart'), {
+    type: 'bar',
+    data: { labels: hours.map(h=>h+':00'), datasets:[{ label:'Access Events', data:hourCounts, backgroundColor:'#00dcb433', borderColor:'#00dcb4', borderWidth:1 }] },
+    options: { responsive:true, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:'#8b949e',maxRotation:45},grid:{color:'rgba(255,255,255,.05)'}}, y:{ticks:{color:'#8b949e'},grid:{color:'rgba(255,255,255,.05)'}} } }
+  });
+
+  // Action chart
+  const actions = (data.actionBreakdown||[]);
+  if (actionChart) actionChart.destroy();
+  actionChart = new Chart($('actionChart'), {
+    type: 'doughnut',
+    data: { labels: actions.map(a=>a._id||'unknown'), datasets:[{ data: actions.map(a=>a.count), backgroundColor:['#00dcb4','#4db8ff','#ffb347','#ff4d6d','#c084fc'], borderWidth:0 }] },
+    options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ color:'#8b949e', font:{size:10} } } } }
+  });
+
+  // Top users
+  const maxCount = Math.max(...(data.topUsers||[]).map(u=>u.count), 1);
+  $('topUsersList').innerHTML = (data.topUsers||[]).map(u =>
+    '<div class="top-user-row">' +
+    '<div class="top-user-name">' + esc(u._id||'unknown') + '</div>' +
+    '<div style="flex:2"><div class="top-user-bar" style="width:' + Math.round(u.count/maxCount*100) + '%"></div></div>' +
+    '<div class="top-user-count">' + u.count + ' events</div>' +
+    (u.highRisk ? '<span class="badge high">' + u.highRisk + ' HIGH</span>' : '') +
+    '</div>'
+  ).join('');
+}
+
+$('sendReportBtn').onclick = async () => {
+  toast('Sending weekly report…');
+  const res = await api('/api/weekly-report', { method: 'POST' });
+  if (res.success) toast(res.message);
+  else toast('Report failed: ' + (res.error||'unknown'), 'danger');
+};
+
+// ── Allowlist ─────────────────────────────────────────────────────────────────
+async function loadAllowlist() {
+  const typeFilter = $('filterAllowType').value;
+  const search = $('filterAllowSearch').value.toLowerCase();
+  const params = typeFilter ? '?type=' + typeFilter : '';
+  const data = await api('/api/allowlist' + params);
+  let rows = data.rows || [];
+  if (search) rows = rows.filter(r => (r.value||'').toLowerCase().includes(search) || (r.note||'').toLowerCase().includes(search));
+  $('allowlistCount').textContent = rows.length + ' entries';
+  const tbody = $('allowlistBody');
+  tbody.innerHTML = '';
+  if (!rows.length) { $('allowlistEmpty').style.display=''; $('allowlistTableWrap').style.display='none'; return; }
+  $('allowlistEmpty').style.display = 'none'; $('allowlistTableWrap').style.display = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><span class="type-badge ' + r.type + '">' + r.type + '</span></td>' +
+      '<td>' + esc(r.value) + '</td>' +
+      '<td><input class="note-input" value="' + esc(r.note||'') + '" data-id="' + r.id + '" placeholder="Add note…" style="background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:.72rem;padding:2px 4px;width:100%;outline:none"/></td>' +
+      '<td style="font-size:.7rem;color:var(--muted)">' + (r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—') + '</td>' +
+      '<td style="font-size:.7rem;color:var(--muted)">' + esc(r.addedBy||'—') + '</td>' +
+      '<td><button class="btn-icon" data-id="' + r.id + '">✕</button></td>';
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('.btn-icon').forEach(btn => {
+    btn.onclick = () => confirm('Remove Entry', 'Remove this allowlist entry?', async () => {
+      await api('/api/allowlist/' + btn.dataset.id, { method: 'DELETE' });
+      toast('Entry removed'); loadAllowlist(); loadStats();
+    });
+  });
+  tbody.querySelectorAll('.note-input').forEach(inp => {
+    let t; inp.oninput = () => { clearTimeout(t); t = setTimeout(async () => {
+      await api('/api/allowlist/' + inp.dataset.id, { method: 'PATCH', body: JSON.stringify({ note: inp.value }) });
+    }, 800); };
+  });
+}
+
+$('addAllowBtn').onclick = async () => {
+  const type = $('newType').value, value = $('newValue').value.trim(), note = $('newNote').value.trim();
+  if (!value) return toast('Enter a value','warn');
+  const res = await api('/api/allowlist', { method:'POST', body: JSON.stringify({type,value,note}) });
+  if (res.created) { toast('Entry added'); $('newValue').value=''; $('newNote').value=''; loadAllowlist(); loadStats(); }
+  else toast('Error: ' + (res.error||'unknown'), 'danger');
+};
+$('filterAllowType').onchange = loadAllowlist;
+let allowTimer; $('filterAllowSearch').oninput = () => { clearTimeout(allowTimer); allowTimer = setTimeout(loadAllowlist, 300); };
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+$('clearHighRisk').onclick = () => confirm('Clear HIGH RISK Logs', 'This will permanently delete all high-risk log entries.', async () => {
+  await api('/api/logs?risk=high', { method:'DELETE' }); toast('High-risk logs cleared'); loadLogs(); loadStats();
+});
+$('clearAllLogs').onclick = () => confirm('Clear ALL Logs', 'This will permanently delete every log entry. This cannot be undone.', async () => {
+  await api('/api/logs', { method:'DELETE' }); toast('All logs cleared'); loadLogs(); loadStats();
+});
+
+// Drive status
+async function checkDriveStatus() {
+  const res = await api('/api/drive/status');
+  $('driveStatus').textContent = res.connected ? '✅ Google Drive connected' : '⚠ Not connected — visit /auth/google to connect';
+  $('driveStatus').style.color = res.connected ? 'var(--accent)' : 'var(--warn)';
+}
+
+$('renewWatchBtn').onclick = async () => {
+  toast('Renewing Drive webhook…');
+  const res = await api('/api/drive/watch', { method:'POST' });
+  if (res.success) toast('Webhook renewed until ' + new Date(res.expiration).toLocaleDateString());
+  else toast('Renew failed: ' + (res.error||'unknown'), 'danger');
+};
+
+$('pollNowBtn').onclick = async () => {
+  toast('Polling Drive reports…');
+  const res = await api('/api/drive/poll', { method:'POST' });
+  if (res.success) { toast(res.message); loadLogs(); loadStats(); }
+  else toast('Poll failed: ' + (res.error||'unknown'), 'danger');
+};
+
+// ── Auto-refresh ──────────────────────────────────────────────────────────────
+function startAutoRefresh() {
+  clearInterval(autoRefreshTimer);
+  const interval = parseInt($('autoRefreshSelect').value) * 1000;
+  if (interval > 0) {
+    autoRefreshTimer = setInterval(() => { loadLogs(); loadStats(); }, interval);
+  }
+}
+$('autoRefreshSelect').onchange = startAutoRefresh;
+
+// ── Load all ──────────────────────────────────────────────────────────────────
+function loadAll() { loadStats(); loadLogs(); loadAllowlist(); checkDriveStatus(); }
+</script>
 </body>
 </html>
