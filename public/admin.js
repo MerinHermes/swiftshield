@@ -72,8 +72,11 @@
   $('lockKey').addEventListener('keydown', e => { if(e.key==='Enter') tryUnlock($('lockKey').value.trim()); });
   $('logoutBtn').addEventListener('click', logout);
 
-  const saved = sessionStorage.getItem(SESSION_KEY);
-  if (saved) tryUnlock(saved);
+  // Restore session after short delay to ensure DOM input elements are ready
+  setTimeout(() => {
+    const saved = sessionStorage.getItem(SESSION_KEY);
+    if (saved) tryUnlock(saved);
+  }, 150);
 
   // ── Tabs ───────────────────────────────────────────────────────────────────
   document.querySelectorAll('.tab-btn').forEach(btn => {

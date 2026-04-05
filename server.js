@@ -72,7 +72,7 @@ app.use(helmet({
       styleSrc:   ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'", "https://unpkg.com"],
       fontSrc:    ["'self'", "https://fonts.gstatic.com"],
       imgSrc:     ["'self'", "data:", "https://*.tile.openstreetmap.org", "https://*.basemaps.cartocdn.com"],
-      connectSrc: ["'self'", "https://ip-api.com"],
+      connectSrc: ["'self'", "https://ip-api.com", "https://unpkg.com", "https://cdn.jsdelivr.net"],
       workerSrc:  ["'self'", "blob:"]
     }
   }
@@ -463,6 +463,14 @@ app.post('/api/drive/webhook', async (req, res) => {
       const outside_office = lastCheckin ? lastCheckin.outside_office : true;
       const risk           = outside_office ? 'high' : 'medium';
 
+      // Dedup: skip if same file already logged in last 60 seconds
+      const recentDup = await logsCol.findOne({
+        drive_file_id: file.id,
+        action,
+        timestamp: { $gte: new Date(Date.now() - 60 * 1000) }
+      });
+      if (recentDup) continue;
+
       // Log it to SwiftShield
       const doc = {
         action,
@@ -596,7 +604,8 @@ async function pollDriveReports() {
             : 'Location unknown - no recent check-in';
         }
 
-        const risk = outside_office ? 'high' : 'medium';
+        // Drive events: low if inside office, medium if outside with no justification (not high — Drive access is expected)
+        const risk = !outside_office ? 'low' : 'medium';
 
         const doc = {
           action,
