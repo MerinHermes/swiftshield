@@ -8,6 +8,10 @@
   ],
   "routes": [
     {
+      "src": "/(?!api|auth|log|config)(.*\\.(html|js|css|jpeg|jpg|png|ico|svg|woff2|woff|ttf))",
+      "dest": "/public/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "server.js"
     }
