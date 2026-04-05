@@ -452,6 +452,16 @@ app.post('/api/drive/webhook', async (req, res) => {
       const file_name = file.name || 'unknown';
       const file_size = file.size ? parseInt(file.size) : null;
 
+      // Try to get last check-in location for this user
+      const lastCheckin = await logsCol.findOne(
+        { user_id, action: 'login', latitude: { $ne: null } },
+        { sort: { timestamp: -1 } }
+      );
+      const latitude       = lastCheckin ? lastCheckin.latitude  : null;
+      const longitude      = lastCheckin ? lastCheckin.longitude : null;
+      const outside_office = lastCheckin ? lastCheckin.outside_office : true;
+      const risk           = outside_office ? 'high' : 'medium';
+
       // Log it to SwiftShield
       const doc = {
         action,
@@ -460,14 +470,14 @@ app.post('/api/drive/webhook', async (req, res) => {
         file_size,
         source:        'google_drive',
         drive_file_id: file.id,
-        ip:            null,
+        ip:            lastCheckin ? lastCheckin.ip : null,
         user_agent:    'Google Drive',
-        device_info:   `Drive: ${file.mimeType || 'unknown type'}`,
-        latitude:      null,
-        longitude:     null,
-        outside_office: true,  // Drive activity is always remote
+        device_info:   'Drive: ' + (file.mimeType || 'unknown type') + (lastCheckin ? ' | Location from last check-in' : ''),
+        latitude,
+        longitude,
+        outside_office,
         justification: null,
-        risk:          'medium' // Drive uploads without justification = medium risk
+        risk
       };
 
       await insertLog(doc);
@@ -512,8 +522,23 @@ async function pollDriveReports() {
 
     for (const activity of activities) {
       const actor    = activity.actor?.email || 'unknown';
+      const actorIp  = activity.ipAddress || activity.actor?.ipAddress || null;
       const events   = activity.events || [];
       const time     = activity.id?.time ? new Date(activity.id.time) : new Date();
+
+      // Geolocate the actor IP if available
+      let ipLat = null, ipLon = null, ipOutside = null;
+      if (actorIp) {
+        try {
+          const geoRes  = await fetch('http://ip-api.com/json/' + actorIp + '?fields=lat,lon,status');
+          const geoData = await geoRes.json();
+          if (geoData.status === 'success') {
+            ipLat = geoData.lat;
+            ipLon = geoData.lon;
+            ipOutside = haversineDist(ipLat, ipLon, OFFICE.latitude, OFFICE.longitude) > OFFICE.radius;
+          }
+        } catch { /* geolocation failed, fallback to checkin */ }
+      }
 
       for (const event of events) {
         const eventName = (event.name || '').toLowerCase();
@@ -523,8 +548,8 @@ async function pollDriveReports() {
         const params    = {};
         (event.parameters || []).forEach(p => { params[p.name] = p.value || p.boolValue || p.intValue || null; });
 
-        const fileName  = params['doc_title'] || params['doc_id'] || 'unknown';
-        const fileId    = params['doc_id'] || null;
+        const fileName   = params['doc_title'] || params['doc_id'] || 'unknown';
+        const fileId     = params['doc_id'] || null;
         const ownerEmail = params['owner'] || null;
 
         // Skip if already logged (dedup by fileId + actor + time)
@@ -540,24 +565,37 @@ async function pollDriveReports() {
 
         const action = eventName === 'download' ? 'download' : 'view';
 
-        // Cross-reference last known location from SwiftShield check-ins (within 24h)
-        const lastCheckin = await logsCol.findOne(
-          {
-            user_id: actor,
-            action: 'login',
-            latitude: { $ne: null },
-            timestamp: { $gte: new Date(time.getTime() - 24 * 60 * 60 * 1000) }
-          },
-          { sort: { timestamp: -1 } }
-        );
+        // Priority: 1) IP geolocation  2) Last check-in location  3) Unknown
+        let latitude, longitude, outside_office, ip, location_note;
 
-        const latitude       = lastCheckin ? lastCheckin.latitude  : null;
-        const longitude      = lastCheckin ? lastCheckin.longitude : null;
-        const outside_office = lastCheckin ? lastCheckin.outside_office : true;
-        const risk           = outside_office ? 'high' : 'medium';
-        const location_note  = lastCheckin
-          ? 'Location inferred from check-in at ' + new Date(lastCheckin.timestamp).toLocaleTimeString()
-          : 'Location unknown - no recent check-in';
+        if (ipLat !== null) {
+          // Best: we got real IP + geo
+          latitude      = ipLat;
+          longitude     = ipLon;
+          outside_office = ipOutside;
+          ip            = actorIp;
+          location_note = 'Location from IP geolocation';
+        } else {
+          // Fallback: last SwiftShield check-in within 24h
+          const lastCheckin = await logsCol.findOne(
+            {
+              user_id: actor,
+              action: 'login',
+              latitude: { $ne: null },
+              timestamp: { $gte: new Date(time.getTime() - 24 * 60 * 60 * 1000) }
+            },
+            { sort: { timestamp: -1 } }
+          );
+          latitude       = lastCheckin ? lastCheckin.latitude  : null;
+          longitude      = lastCheckin ? lastCheckin.longitude : null;
+          outside_office = lastCheckin ? lastCheckin.outside_office : true;
+          ip             = lastCheckin ? lastCheckin.ip : null;
+          location_note  = lastCheckin
+            ? 'Location inferred from check-in at ' + new Date(lastCheckin.timestamp).toLocaleTimeString()
+            : 'Location unknown - no recent check-in';
+        }
+
+        const risk = outside_office ? 'high' : 'medium';
 
         const doc = {
           action,
@@ -567,7 +605,7 @@ async function pollDriveReports() {
           source:        'google_drive',
           drive_file_id: fileId,
           drive_owner:   ownerEmail,
-          ip:            lastCheckin ? lastCheckin.ip : null,
+          ip,
           user_agent:    'Google Drive',
           device_info:   'Drive: ' + eventName + ' | ' + location_note,
           latitude,
