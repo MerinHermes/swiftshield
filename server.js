@@ -68,11 +68,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'"],
-      styleSrc:   ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'"],
+      scriptSrc:  ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdn.jsdelivr.net"],
+      styleSrc:   ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'", "https://unpkg.com"],
       fontSrc:    ["'self'", "https://fonts.gstatic.com"],
-      imgSrc:     ["'self'", "data:"],
-      connectSrc: ["'self'"]
+      imgSrc:     ["'self'", "data:", "https://*.tile.openstreetmap.org", "https://*.basemaps.cartocdn.com"],
+      connectSrc: ["'self'", "https://ip-api.com"],
+      workerSrc:  ["'self'", "blob:"]
     }
   }
 }));
