@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -8,13 +7,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="/styles.css">
   <style>
     .admin-lock{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
     .lock-card{width:100%;max-width:420px;padding:40px 36px;position:relative;overflow:hidden}
-    .lock-card::before,.lock-card::after{content:'';position:absolute;width:20px;height:20px;border-color:var(--accent);border-style:solid;opacity:0.5}
+    .lock-card::before,.lock-card::after{content:'';position:absolute;width:20px;height:20px;border-color:var(--accent);border-style:solid;opacity:.5}
     .lock-card::before{top:8px;left:8px;border-width:2px 0 0 2px;border-radius:3px 0 0 0}
     .lock-card::after{bottom:8px;right:8px;border-width:0 2px 2px 0;border-radius:0 0 3px 0}
     .lock-icon{font-size:2rem;text-align:center;margin-bottom:8px}
@@ -35,7 +32,6 @@
     .stat-value.danger{color:var(--danger)}.stat-value.warn{color:var(--warn)}.stat-value.accent{color:var(--accent)}
     .filter-card{padding:16px 20px;margin-bottom:16px}
     .filter-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .filter-row .input{flex:1;min-width:140px}
     .logs-card{padding:0;overflow:hidden}
     .table-wrap{overflow-x:auto}
     .logs-table,.allowlist-table{width:100%;border-collapse:collapse;font-size:.78rem}
@@ -43,6 +39,7 @@
     .logs-table tbody tr,.allowlist-table tbody tr{border-bottom:1px solid rgba(0,220,180,.06);transition:background .12s}
     .logs-table tbody tr:hover,.allowlist-table tbody tr:hover{background:rgba(0,220,180,.04)}
     .logs-table tbody td,.allowlist-table tbody td{padding:10px 14px;vertical-align:middle;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .logs-table td pre.mono{font-family:var(--mono);font-size:.68rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:pre}
     .badge{display:inline-block;padding:3px 8px;border-radius:4px;font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;font-weight:700}
     .badge.high{background:rgba(255,77,109,.18);color:var(--danger);border:1px solid rgba(255,77,109,.3)}
     .badge.medium{background:rgba(255,179,71,.15);color:var(--warn);border:1px solid rgba(255,179,71,.3)}
@@ -65,6 +62,8 @@
     .add-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;padding:20px;border-bottom:1px solid var(--border)}
     .add-row .fg{display:flex;flex-direction:column;gap:5px;flex:1;min-width:140px}
     .add-row .fg label{font-family:var(--mono);font-size:.6rem;color:var(--muted);letter-spacing:.08em}
+    .note-input{background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:.72rem;padding:2px 4px;width:100%;outline:none;transition:border-color .15s}
+    .note-input:focus{border-color:var(--accent);color:var(--text)}
     .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
     @media(max-width:640px){.settings-grid{grid-template-columns:1fr}}
     .settings-card{padding:24px}
@@ -104,16 +103,12 @@
     .table-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border)}
     .table-header-title{font-family:var(--mono);font-size:.65rem;color:var(--muted);letter-spacing:.1em}
     .table-header-actions{display:flex;gap:8px}
-    /* Map */
     #accessMap{height:420px;border-radius:10px;border:1px solid var(--border)}
-    .leaflet-container{background:#0d1117!important}
-    /* Charts */
     .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
     @media(max-width:768px){.charts-grid{grid-template-columns:1fr}}
     .chart-card{padding:20px}
     .chart-card h4{font-family:var(--mono);font-size:.65rem;color:var(--muted);letter-spacing:.1em;margin-bottom:16px}
     canvas{max-height:220px}
-    /* Analytics top users */
     .top-users-list{display:flex;flex-direction:column;gap:8px}
     .top-user-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:7px;background:rgba(0,0,0,.2);border:1px solid var(--border)}
     .top-user-name{flex:1;font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -124,31 +119,28 @@
 </head>
 <body>
 
-<!-- LOCK SCREEN -->
 <div id="lockScreen" class="admin-lock">
   <div class="lock-card glass">
     <div class="lock-icon">⬡</div>
     <div class="lock-title">SwiftShield Admin</div>
     <div class="lock-sub">RESTRICTED ACCESS — ADMIN CREDENTIALS REQUIRED</div>
-    <div class="setting-field" style="margin-bottom:0">
-      <label class="field-label" for="lockKey">ADMIN API KEY</label>
-      <input id="lockKey" class="input" type="password" placeholder="Enter admin key…" autocomplete="current-password"/>
-    </div>
-    <button id="unlockBtn" class="btn primary" style="width:100%;margin-top:12px">⬡ Authenticate</button>
+    <form id="lockForm" onsubmit="return false" autocomplete="on">
+      <div class="setting-field" style="margin-bottom:0">
+        <label class="field-label" for="lockKey">ADMIN API KEY</label>
+        <input id="lockKey" class="input" type="password" placeholder="Enter admin key…" autocomplete="current-password" name="adminkey"/>
+      </div>
+      <button id="unlockBtn" type="submit" class="btn primary" style="width:100%;margin-top:12px">⬡ Authenticate</button>
+    </form>
     <a href="/" class="btn ghost" style="width:100%;margin-top:10px;display:flex">← Back to User View</a>
     <div id="lockError" class="lock-error">Invalid key — check ADMIN_API_KEY in your .env file</div>
   </div>
 </div>
 
-<!-- ADMIN DASHBOARD -->
 <div id="adminDash" class="hidden">
   <header class="topbar glass">
     <div class="brand">
       <img src="/logo.jpeg" class="logo-small"/>
-      <div>
-        <div class="app-title">SwiftShield Admin</div>
-        <div class="muted-sm">ACCESS MONITORING DASHBOARD</div>
-      </div>
+      <div><div class="app-title">SwiftShield Admin</div><div class="muted-sm">ACCESS MONITORING DASHBOARD</div></div>
     </div>
     <nav class="nav-actions">
       <div class="session-info"><span class="session-dot"></span>SESSION ACTIVE</div>
@@ -174,23 +166,16 @@
       <button class="tab-btn" data-tab="settings">⬡ SETTINGS</button>
     </div>
 
-    <!-- ── LOGS TAB ── -->
+    <!-- LOGS TAB -->
     <div id="tab-logs" class="tab-pane active">
       <section class="filter-card glass">
         <div class="filter-row">
-          <input id="filterUser" class="input" placeholder="Filter by user / email…" style="min-width:180px"/>
+          <input id="filterUser" class="input" placeholder="Filter by user / email…" style="min-width:180px;flex:1"/>
           <select id="filterRisk" class="input" style="max-width:160px">
-            <option value="">All Risk Levels</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
+            <option value="">All Risk Levels</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
           </select>
           <select id="filterAction" class="input" style="max-width:160px">
-            <option value="">All Actions</option>
-            <option value="login">Login</option>
-            <option value="upload">Upload</option>
-            <option value="download">Download</option>
-            <option value="view">View</option>
+            <option value="">All Actions</option><option value="login">Login</option><option value="upload">Upload</option><option value="download">Download</option><option value="view">View</option>
           </select>
           <button id="clearFilters" class="btn ghost sm">Clear</button>
           <button id="refreshLogs" class="btn ghost sm">↻ Refresh</button>
@@ -204,83 +189,67 @@
             <button id="exportDriveBtn" class="btn ghost sm">⬆ Export to Drive</button>
           </div>
         </div>
-        <div id="logsEmpty" class="empty">
-          <div class="empty-icon">⬡</div><h4>No logs found</h4><p>Adjust filters or wait for access events.</p>
-        </div>
+        <div id="logsEmpty" class="empty"><div class="empty-icon">⬡</div><h4>No logs found</h4><p>Adjust filters or wait for access events.</p></div>
         <div class="table-wrap" id="tableWrap" style="display:none">
           <table class="logs-table">
-            <thead>
-              <tr><th>ID</th><th>USER</th><th>ACTION</th><th>IP</th><th>DEVICE</th><th>LOCATION</th><th>RISK</th><th>JUSTIFICATION</th><th>TIME</th><th></th></tr>
-            </thead>
+            <thead><tr><th>ID</th><th>USER</th><th>ACTION</th><th>IP</th><th>DEVICE</th><th>LOCATION</th><th>RISK</th><th>JUSTIFICATION</th><th>TIME</th><th></th></tr></thead>
             <tbody id="logsBody"></tbody>
           </table>
         </div>
         <div class="pagination" id="logsPagination" style="display:none">
-          <button id="prevPage">← Prev</button>
-          <span id="pageInfo">Page 1</span>
-          <button id="nextPage">Next →</button>
+          <button id="prevPage">← Prev</button><span id="pageInfo">Page 1</span><button id="nextPage">Next →</button>
         </div>
       </section>
     </div>
 
-    <!-- ── MAP TAB ── -->
+    <!-- MAP TAB -->
     <div id="tab-map" class="tab-pane">
       <section class="glass" style="padding:20px;margin-bottom:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <div>
-            <div style="font-family:var(--mono);font-size:.65rem;color:var(--muted);letter-spacing:.1em">LIVE ACCESS MAP</div>
-            <div style="font-size:.8rem;color:var(--text);margin-top:4px">Last 100 access events with location data</div>
-          </div>
+          <div><div style="font-family:var(--mono);font-size:.65rem;color:var(--muted);letter-spacing:.1em">LIVE ACCESS MAP</div><div style="font-size:.8rem;color:var(--text);margin-top:4px">Last 100 access events with location data</div></div>
           <button id="refreshMap" class="btn ghost sm">↻ Refresh</button>
         </div>
         <div id="accessMap"></div>
         <div style="display:flex;gap:16px;margin-top:12px;font-family:var(--mono);font-size:.65rem;flex-wrap:wrap">
-          <span>🔴 High Risk</span><span>🟡 Medium Risk</span><span>🟢 Low Risk</span><span>⬡ Office Location</span>
+          <span>🔴 High Risk</span><span>🟡 Medium Risk</span><span>🟢 Low Risk</span><span>⬡ Office</span>
         </div>
       </section>
     </div>
 
-    <!-- ── ANALYTICS TAB ── -->
+    <!-- ANALYTICS TAB -->
     <div id="tab-analytics" class="tab-pane">
       <div class="charts-grid">
         <div class="chart-card glass"><h4>RISK TREND — LAST 7 DAYS</h4><canvas id="riskChart"></canvas></div>
         <div class="chart-card glass"><h4>PEAK ACCESS HOURS</h4><canvas id="hoursChart"></canvas></div>
         <div class="chart-card glass"><h4>ACTION BREAKDOWN</h4><canvas id="actionChart"></canvas></div>
-        <div class="chart-card glass">
-          <h4>TOP USERS BY ACTIVITY</h4>
-          <div id="topUsersList" class="top-users-list"></div>
-        </div>
+        <div class="chart-card glass"><h4>TOP USERS BY ACTIVITY</h4><div id="topUsersList" class="top-users-list"></div></div>
       </div>
       <section class="glass" style="padding:20px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <div style="font-family:var(--mono);font-size:.65rem;color:var(--muted);letter-spacing:.1em">WEEKLY EMAIL REPORT</div>
           <button id="sendReportBtn" class="btn ghost sm">📧 Send Report Now</button>
         </div>
-        <p style="font-size:.8rem;color:var(--muted)">Sends a weekly summary to your admin email. Reports are also scheduled every Monday at 8AM automatically.</p>
+        <p style="font-size:.8rem;color:var(--muted)">Sends a weekly summary to your admin email. Auto-scheduled every Monday at 8AM.</p>
       </section>
     </div>
 
-    <!-- ── ALLOWLIST TAB ── -->
+    <!-- ALLOWLIST TAB -->
     <div id="tab-allowlist" class="tab-pane">
       <section class="logs-card glass" style="margin-bottom:20px">
         <div class="add-row">
-          <div class="fg"><label>TYPE</label>
-            <select id="newType" class="input"><option value="username">Username</option><option value="email">Email</option><option value="ip">IP Address</option></select>
-          </div>
+          <div class="fg"><label>TYPE</label><select id="newType" class="input"><option value="username">Username</option><option value="email">Email</option><option value="ip">IP Address</option></select></div>
           <div class="fg" style="flex:2"><label>VALUE</label><input id="newValue" class="input" placeholder="username, user@email.com, or IP…"/></div>
           <div class="fg" style="flex:2"><label>NOTE (optional)</label><input id="newNote" class="input" placeholder="Reason for allowlisting…"/></div>
           <button id="addAllowBtn" class="btn primary sm" style="align-self:flex-end;white-space:nowrap">+ Add Entry</button>
         </div>
         <div style="padding:0 20px 14px">
           <div class="filter-row" style="gap:10px">
-            <select id="filterAllowType" class="input" style="max-width:180px;flex:0 0 180px">
-              <option value="">All Types</option><option value="username">Username</option><option value="email">Email</option><option value="ip">IP Address</option>
-            </select>
+            <select id="filterAllowType" class="input" style="max-width:180px;flex:0 0 180px"><option value="">All Types</option><option value="username">Username</option><option value="email">Email</option><option value="ip">IP Address</option></select>
             <input id="filterAllowSearch" class="input" placeholder="Search value or note…" style="max-width:300px"/>
             <span id="allowlistCount" style="font-family:var(--mono);font-size:.65rem;color:var(--muted);margin-left:auto">— entries</span>
           </div>
         </div>
-        <div id="allowlistEmpty" class="empty" style="padding:40px"><div class="empty-icon">⬡</div><h4>No entries yet</h4><p>Add usernames, emails, or IPs above.</p></div>
+        <div id="allowlistEmpty" class="empty" style="padding:40px"><div class="empty-icon">⬡</div><h4>No entries yet</h4><p>Add usernames, emails, or IPs above to bypass risk flag.</p></div>
         <div class="table-wrap" id="allowlistTableWrap" style="display:none">
           <table class="allowlist-table">
             <thead><tr><th>TYPE</th><th>VALUE</th><th>NOTE</th><th>ADDED</th><th>ADDED BY</th><th></th></tr></thead>
@@ -290,7 +259,7 @@
       </section>
     </div>
 
-    <!-- ── SETTINGS TAB ── -->
+    <!-- SETTINGS TAB -->
     <div id="tab-settings" class="tab-pane">
       <div class="settings-grid">
         <div class="settings-card glass">
@@ -323,10 +292,7 @@
           <div class="setting-field"><label>SESSION STARTED</label><input id="sessionStart" class="input" readonly/></div>
           <div class="setting-field"><label>AUTO-REFRESH</label>
             <select id="autoRefreshSelect" class="input">
-              <option value="0">Off</option>
-              <option value="15">Every 15 seconds</option>
-              <option value="30" selected>Every 30 seconds</option>
-              <option value="60">Every 60 seconds</option>
+              <option value="0">Off</option><option value="15">Every 15 seconds</option><option value="30" selected>Every 30 seconds</option><option value="60">Every 60 seconds</option>
             </select>
           </div>
           <button id="logoutBtn2" class="btn ghost" style="width:100%;margin-top:4px">Logout</button>
@@ -342,368 +308,17 @@
   </main>
 </div>
 
-<!-- Confirm Modal -->
 <div id="confirmModal" class="modal hidden" role="dialog" aria-modal="true">
   <div class="modal-panel glass">
     <div class="modal-title" id="confirmTitle">Confirm Action</div>
     <div class="modal-sub" id="confirmMsg">Are you sure?</div>
-    <div class="modal-actions">
-      <button id="confirmCancel" class="btn ghost">Cancel</button>
-      <button id="confirmOk" class="btn primary">Confirm</button>
-    </div>
+    <div class="modal-actions"><button id="confirmCancel" class="btn ghost">Cancel</button><button id="confirmOk" class="btn primary">Confirm</button></div>
   </div>
 </div>
 
 <div id="toasts" class="toasts" aria-live="polite"></div>
-
-<script>
-// ── State ─────────────────────────────────────────────────────────────────────
-let adminKey = '', page = 0, total = 0, filterUser = '', filterRisk = '', filterAction = '';
-const PAGE_SIZE = 20;
-let autoRefreshTimer = null;
-let map = null, riskChart = null, hoursChart = null, actionChart = null;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const $ = id => document.getElementById(id);
-const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-function toast(msg, type='') {
-  const t = document.createElement('div');
-  t.className = 'toast ' + type;
-  t.textContent = msg;
-  $('toasts').appendChild(t);
-  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 3500);
-}
-
-function confirm(title, msg, cb) {
-  $('confirmTitle').textContent = title;
-  $('confirmMsg').textContent = msg;
-  $('confirmModal').classList.remove('hidden');
-  $('confirmOk').onclick = () => { $('confirmModal').classList.add('hidden'); cb(); };
-  $('confirmCancel').onclick = () => $('confirmModal').classList.add('hidden');
-}
-
-async function api(path, opts={}) {
-  const r = await fetch(path, { headers: { 'x-admin-key': adminKey, 'Content-Type': 'application/json', ...(opts.headers||{}) }, ...opts });
-  return r.json();
-}
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
-async function unlock() {
-  const key = $('lockKey').value.trim();
-  if (!key) return;
-  const res = await fetch('/api/admin/verify', { headers: { 'x-admin-key': key } });
-  if (res.ok) {
-    adminKey = key;
-    $('lockScreen').classList.add('hidden');
-    $('adminDash').classList.remove('hidden');
-    $('sessionStart').value = new Date().toLocaleString();
-    loadAll();
-    startAutoRefresh();
-    fetch('/config').then(r=>r.json()).then(d => {
-      if (d.office) { $('cfgLat').value = d.office.latitude; $('cfgLon').value = d.office.longitude; $('cfgRadius').value = d.office.radius; }
-    });
-  } else {
-    $('lockError').classList.add('visible');
-  }
-}
-
-$('unlockBtn').onclick = unlock;
-$('lockKey').onkeydown = e => e.key === 'Enter' && unlock();
-[$('logoutBtn'),$('logoutBtn2')].forEach(b => b.onclick = () => location.reload());
-
-// ── Tabs ──────────────────────────────────────────────────────────────────────
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    $('tab-' + btn.dataset.tab).classList.add('active');
-    if (btn.dataset.tab === 'map') initMap();
-    if (btn.dataset.tab === 'analytics') loadAnalytics();
-  };
-});
-
-// ── Stats ─────────────────────────────────────────────────────────────────────
-async function loadStats() {
-  const [stats, allow] = await Promise.all([api('/api/stats'), api('/api/allowlist')]);
-  $('statTotal').textContent = stats.total ?? '—';
-  $('statHigh').textContent = stats.highRisk ?? '—';
-  $('statExternal').textContent = stats.externalAccess ?? '—';
-  $('statAllowlist').textContent = allow.total ?? '—';
-}
-
-// ── Logs ──────────────────────────────────────────────────────────────────────
-async function loadLogs() {
-  const params = new URLSearchParams({ limit: PAGE_SIZE, skip: page * PAGE_SIZE });
-  if (filterUser)   params.set('user_id', filterUser);
-  if (filterRisk)   params.set('risk', filterRisk);
-  if (filterAction) params.set('action', filterAction);
-  const data = await api('/api/logs?' + params);
-  total = data.total || 0;
-  $('logsCountLabel').textContent = total + ' RECORDS';
-  const tbody = $('logsBody');
-  tbody.innerHTML = '';
-  if (!data.rows?.length) {
-    $('logsEmpty').style.display = '';
-    $('tableWrap').style.display = 'none';
-    $('logsPagination').style.display = 'none';
-    return;
-  }
-  $('logsEmpty').style.display = 'none';
-  $('tableWrap').style.display = '';
-  $('logsPagination').style.display = 'flex';
-  data.rows.forEach(r => {
-    const tr = document.createElement('tr');
-    const loc = r.latitude ? r.latitude.toFixed(4) + ', ' + r.longitude.toFixed(4) : '—';
-    const newDeviceBadge = r.new_device ? '<span class="badge new-device" style="margin-left:4px">NEW DEVICE</span>' : '';
-    const bulkBadge = r.bulk_download ? '<span class="badge high" style="margin-left:4px">BULK</span>' : '';
-    tr.innerHTML =
-      '<td><code style="font-size:.65rem;color:var(--muted)">' + esc(r.id.slice(-8)) + '</code></td>' +
-      '<td>' + esc(r.user_id||'—') + newDeviceBadge + '</td>' +
-      '<td><span class="badge action">' + esc(r.action||'—') + '</span>' + bulkBadge + '</td>' +
-      '<td>' + esc(r.ip||'—') + '</td>' +
-      '<td style="max-width:160px"><span title="' + esc(r.user_agent||'') + '">' + esc((r.device_info||r.user_agent||'—').slice(0,30)) + '</span></td>' +
-      '<td>' + loc + '</td>' +
-      '<td><span class="badge ' + (r.risk||'low') + '">' + (r.risk||'—').toUpperCase() + '</span></td>' +
-      '<td>' + esc((r.justification||'—').slice(0,40)) + '</td>' +
-      '<td style="white-space:nowrap;font-size:.68rem;color:var(--muted)">' + (r.timestamp ? new Date(r.timestamp).toLocaleString() : '—') + '</td>' +
-      '<td><button class="btn-icon" data-id="' + r.id + '">✕</button></td>';
-    tbody.appendChild(tr);
-  });
-  tbody.querySelectorAll('.btn-icon').forEach(btn => {
-    btn.onclick = () => confirm('Delete Log', 'Remove this log entry?', async () => {
-      await api('/api/logs/' + btn.dataset.id, { method: 'DELETE' });
-      toast('Log deleted'); loadLogs(); loadStats();
-    });
-  });
-  $('pageInfo').textContent = 'Page ' + (page+1) + ' of ' + Math.max(1, Math.ceil(total/PAGE_SIZE));
-  $('prevPage').disabled = page === 0;
-  $('nextPage').disabled = (page+1)*PAGE_SIZE >= total;
-}
-
-$('prevPage').onclick = () => { page--; loadLogs(); };
-$('nextPage').onclick = () => { page++; loadLogs(); };
-$('refreshLogs').onclick = () => { page = 0; loadLogs(); loadStats(); };
-$('clearFilters').onclick = () => {
-  $('filterUser').value = ''; $('filterRisk').value = ''; $('filterAction').value = '';
-  filterUser = ''; filterRisk = ''; filterAction = ''; page = 0; loadLogs();
-};
-let filterTimer;
-$('filterUser').oninput = () => { clearTimeout(filterTimer); filterTimer = setTimeout(() => { filterUser = $('filterUser').value.trim(); page = 0; loadLogs(); }, 400); };
-$('filterRisk').onchange = () => { filterRisk = $('filterRisk').value; page = 0; loadLogs(); };
-$('filterAction').onchange = () => { filterAction = $('filterAction').value; page = 0; loadLogs(); };
-
-// ── Export ────────────────────────────────────────────────────────────────────
-$('exportCsvBtn').onclick = async () => {
-  const data = await api('/api/logs?limit=1000');
-  if (!data.rows?.length) return toast('No logs to export','warn');
-  const headers = ['id','timestamp','action','user_id','risk','outside_office','file_name','ip','latitude','longitude','justification'];
-  const csv = [headers.join(','), ...data.rows.map(r => headers.map(h => '"' + String(r[h]??'').replace(/"/g,'""') + '"').join(','))].join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
-  a.download = 'swiftshield-logs-' + new Date().toISOString().slice(0,10) + '.csv';
-  a.click();
-  toast('CSV downloaded');
-};
-
-$('exportDriveBtn').onclick = async () => {
-  toast('Exporting to Google Drive…');
-  const res = await api('/api/export-to-drive', { method: 'POST' });
-  if (res.success) toast('Exported ' + res.rows + ' rows → ' + res.fileName);
-  else toast('Drive export failed: ' + (res.error||'unknown'), 'danger');
-};
-
-// ── Map ───────────────────────────────────────────────────────────────────────
-async function initMap() {
-  if (!map) {
-    map = L.map('accessMap', { zoomControl: true }).setView([20.5937, 78.9629], 5);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap © CARTO', maxZoom: 18
-    }).addTo(map);
-  }
-  await loadMapData();
-}
-
-async function loadMapData() {
-  if (!map) return;
-  map.eachLayer(l => { if (l instanceof L.CircleMarker || l instanceof L.Marker) map.removeLayer(l); });
-
-  const data = await api('/api/analytics');
-  const cfg = await fetch('/config').then(r=>r.json());
-
-  // Office marker
-  if (cfg.office) {
-    L.circleMarker([cfg.office.latitude, cfg.office.longitude], {
-      radius: 14, color: '#00dcb4', fillColor: '#00dcb4', fillOpacity: 0.15, weight: 2
-    }).addTo(map).bindPopup('<b>Office Perimeter</b><br>Radius: ' + cfg.office.radius + 'm');
-  }
-
-  // Access points
-  const colorMap = { high: '#ff4d6d', medium: '#ffb347', low: '#00dcb4' };
-  (data.recentLocations || []).forEach(loc => {
-    const color = colorMap[loc.risk] || '#888';
-    L.circleMarker([loc.latitude, loc.longitude], {
-      radius: 7, color, fillColor: color, fillOpacity: 0.7, weight: 1.5
-    }).addTo(map).bindPopup(
-      '<b>' + esc(loc.user_id||'unknown') + '</b><br>' +
-      'Action: ' + (loc.action||'—') + '<br>' +
-      'Risk: <b style="color:' + color + '">' + (loc.risk||'—').toUpperCase() + '</b><br>' +
-      new Date(loc.timestamp).toLocaleString()
-    );
-  });
-
-  toast('Map updated with ' + (data.recentLocations?.length||0) + ' locations');
-}
-
-$('refreshMap').onclick = loadMapData;
-
-// ── Analytics ─────────────────────────────────────────────────────────────────
-async function loadAnalytics() {
-  const data = await api('/api/analytics');
-
-  // Risk trend chart
-  const days = [...new Set((data.riskTrend||[]).map(d => d._id.day))].sort();
-  const riskTypes = ['high','medium','low'];
-  const riskColors = { high: '#ff4d6d', medium: '#ffb347', low: '#00dcb4' };
-  const datasets = riskTypes.map(risk => ({
-    label: risk.toUpperCase(),
-    data: days.map(day => { const found = data.riskTrend.find(d => d._id.day===day && d._id.risk===risk); return found ? found.count : 0; }),
-    borderColor: riskColors[risk], backgroundColor: riskColors[risk] + '33', tension: 0.4, fill: true
-  }));
-  if (riskChart) riskChart.destroy();
-  riskChart = new Chart($('riskChart'), {
-    type: 'line',
-    data: { labels: days.map(d => d.slice(5)), datasets },
-    options: { responsive:true, plugins:{ legend:{ labels:{ color:'#8b949e', font:{size:10} } } }, scales:{ x:{ ticks:{color:'#8b949e'}, grid:{color:'rgba(255,255,255,.05)'} }, y:{ ticks:{color:'#8b949e'}, grid:{color:'rgba(255,255,255,.05)'} } } }
-  });
-
-  // Hourly chart
-  const hours = Array.from({length:24},(_,i)=>i);
-  const hourCounts = hours.map(h => { const found = (data.hourlyDist||[]).find(d=>d._id===h); return found?found.count:0; });
-  if (hoursChart) hoursChart.destroy();
-  hoursChart = new Chart($('hoursChart'), {
-    type: 'bar',
-    data: { labels: hours.map(h=>h+':00'), datasets:[{ label:'Access Events', data:hourCounts, backgroundColor:'#00dcb433', borderColor:'#00dcb4', borderWidth:1 }] },
-    options: { responsive:true, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:'#8b949e',maxRotation:45},grid:{color:'rgba(255,255,255,.05)'}}, y:{ticks:{color:'#8b949e'},grid:{color:'rgba(255,255,255,.05)'}} } }
-  });
-
-  // Action chart
-  const actions = (data.actionBreakdown||[]);
-  if (actionChart) actionChart.destroy();
-  actionChart = new Chart($('actionChart'), {
-    type: 'doughnut',
-    data: { labels: actions.map(a=>a._id||'unknown'), datasets:[{ data: actions.map(a=>a.count), backgroundColor:['#00dcb4','#4db8ff','#ffb347','#ff4d6d','#c084fc'], borderWidth:0 }] },
-    options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ color:'#8b949e', font:{size:10} } } } }
-  });
-
-  // Top users
-  const maxCount = Math.max(...(data.topUsers||[]).map(u=>u.count), 1);
-  $('topUsersList').innerHTML = (data.topUsers||[]).map(u =>
-    '<div class="top-user-row">' +
-    '<div class="top-user-name">' + esc(u._id||'unknown') + '</div>' +
-    '<div style="flex:2"><div class="top-user-bar" style="width:' + Math.round(u.count/maxCount*100) + '%"></div></div>' +
-    '<div class="top-user-count">' + u.count + ' events</div>' +
-    (u.highRisk ? '<span class="badge high">' + u.highRisk + ' HIGH</span>' : '') +
-    '</div>'
-  ).join('');
-}
-
-$('sendReportBtn').onclick = async () => {
-  toast('Sending weekly report…');
-  const res = await api('/api/weekly-report', { method: 'POST' });
-  if (res.success) toast(res.message);
-  else toast('Report failed: ' + (res.error||'unknown'), 'danger');
-};
-
-// ── Allowlist ─────────────────────────────────────────────────────────────────
-async function loadAllowlist() {
-  const typeFilter = $('filterAllowType').value;
-  const search = $('filterAllowSearch').value.toLowerCase();
-  const params = typeFilter ? '?type=' + typeFilter : '';
-  const data = await api('/api/allowlist' + params);
-  let rows = data.rows || [];
-  if (search) rows = rows.filter(r => (r.value||'').toLowerCase().includes(search) || (r.note||'').toLowerCase().includes(search));
-  $('allowlistCount').textContent = rows.length + ' entries';
-  const tbody = $('allowlistBody');
-  tbody.innerHTML = '';
-  if (!rows.length) { $('allowlistEmpty').style.display=''; $('allowlistTableWrap').style.display='none'; return; }
-  $('allowlistEmpty').style.display = 'none'; $('allowlistTableWrap').style.display = '';
-  rows.forEach(r => {
-    const tr = document.createElement('tr');
-    tr.innerHTML =
-      '<td><span class="type-badge ' + r.type + '">' + r.type + '</span></td>' +
-      '<td>' + esc(r.value) + '</td>' +
-      '<td><input class="note-input" value="' + esc(r.note||'') + '" data-id="' + r.id + '" placeholder="Add note…" style="background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:.72rem;padding:2px 4px;width:100%;outline:none"/></td>' +
-      '<td style="font-size:.7rem;color:var(--muted)">' + (r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—') + '</td>' +
-      '<td style="font-size:.7rem;color:var(--muted)">' + esc(r.addedBy||'—') + '</td>' +
-      '<td><button class="btn-icon" data-id="' + r.id + '">✕</button></td>';
-    tbody.appendChild(tr);
-  });
-  tbody.querySelectorAll('.btn-icon').forEach(btn => {
-    btn.onclick = () => confirm('Remove Entry', 'Remove this allowlist entry?', async () => {
-      await api('/api/allowlist/' + btn.dataset.id, { method: 'DELETE' });
-      toast('Entry removed'); loadAllowlist(); loadStats();
-    });
-  });
-  tbody.querySelectorAll('.note-input').forEach(inp => {
-    let t; inp.oninput = () => { clearTimeout(t); t = setTimeout(async () => {
-      await api('/api/allowlist/' + inp.dataset.id, { method: 'PATCH', body: JSON.stringify({ note: inp.value }) });
-    }, 800); };
-  });
-}
-
-$('addAllowBtn').onclick = async () => {
-  const type = $('newType').value, value = $('newValue').value.trim(), note = $('newNote').value.trim();
-  if (!value) return toast('Enter a value','warn');
-  const res = await api('/api/allowlist', { method:'POST', body: JSON.stringify({type,value,note}) });
-  if (res.created) { toast('Entry added'); $('newValue').value=''; $('newNote').value=''; loadAllowlist(); loadStats(); }
-  else toast('Error: ' + (res.error||'unknown'), 'danger');
-};
-$('filterAllowType').onchange = loadAllowlist;
-let allowTimer; $('filterAllowSearch').oninput = () => { clearTimeout(allowTimer); allowTimer = setTimeout(loadAllowlist, 300); };
-
-// ── Settings ──────────────────────────────────────────────────────────────────
-$('clearHighRisk').onclick = () => confirm('Clear HIGH RISK Logs', 'This will permanently delete all high-risk log entries.', async () => {
-  await api('/api/logs?risk=high', { method:'DELETE' }); toast('High-risk logs cleared'); loadLogs(); loadStats();
-});
-$('clearAllLogs').onclick = () => confirm('Clear ALL Logs', 'This will permanently delete every log entry. This cannot be undone.', async () => {
-  await api('/api/logs', { method:'DELETE' }); toast('All logs cleared'); loadLogs(); loadStats();
-});
-
-// Drive status
-async function checkDriveStatus() {
-  const res = await api('/api/drive/status');
-  $('driveStatus').textContent = res.connected ? '✅ Google Drive connected' : '⚠ Not connected — visit /auth/google to connect';
-  $('driveStatus').style.color = res.connected ? 'var(--accent)' : 'var(--warn)';
-}
-
-$('renewWatchBtn').onclick = async () => {
-  toast('Renewing Drive webhook…');
-  const res = await api('/api/drive/watch', { method:'POST' });
-  if (res.success) toast('Webhook renewed until ' + new Date(res.expiration).toLocaleDateString());
-  else toast('Renew failed: ' + (res.error||'unknown'), 'danger');
-};
-
-$('pollNowBtn').onclick = async () => {
-  toast('Polling Drive reports…');
-  const res = await api('/api/drive/poll', { method:'POST' });
-  if (res.success) { toast(res.message); loadLogs(); loadStats(); }
-  else toast('Poll failed: ' + (res.error||'unknown'), 'danger');
-};
-
-// ── Auto-refresh ──────────────────────────────────────────────────────────────
-function startAutoRefresh() {
-  clearInterval(autoRefreshTimer);
-  const interval = parseInt($('autoRefreshSelect').value) * 1000;
-  if (interval > 0) {
-    autoRefreshTimer = setInterval(() => { loadLogs(); loadStats(); }, interval);
-  }
-}
-$('autoRefreshSelect').onchange = startAutoRefresh;
-
-// ── Load all ──────────────────────────────────────────────────────────────────
-function loadAll() { loadStats(); loadLogs(); loadAllowlist(); checkDriveStatus(); }
-</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/admin.js"></script>
 </body>
 </html>
